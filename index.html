@@ -1,119 +1,345 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kisan Sathi - J&K Agriculture Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
-        .container { max-width: 1600px; margin: 0 auto; }
-        header { text-align: center; color: white; margin-bottom: 30px; padding: 20px; }
-        header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-        header p { font-size: 1.2em; opacity: 0.9; }
-        
-        .config-box { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .config-box h3 { margin-bottom: 15px; color: #333; }
-        .config-box input { width: 100%; padding: 10px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 8px; }
-        .config-box button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; margin-right: 10px; }
-        .config-box button:hover { opacity: 0.9; }
-        .config-box .help { color: #666; font-size: 0.9em; margin-top: 10px; }
-        
-        .loading { text-align: center; padding: 40px; color: white; font-size: 1.2em; }
-        .error { background: #ffebee; color: #c62828; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .stat-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transition: transform 0.3s; }
-        .stat-card:hover { transform: translateY(-5px); }
-        .stat-card h3 { color: #666; font-size: 0.85em; text-transform: uppercase; margin-bottom: 8px; }
-        .stat-card .value { font-size: 2em; font-weight: bold; color: #333; }
-        .stat-card.kashmir { border-left: 5px solid #3498db; }
-        .stat-card.jammu { border-left: 5px solid #e74c3c; }
-        .stat-card.total { border-left: 5px solid #27ae60; }
-        
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .tab { padding: 12px 24px; background: rgba(255,255,255,0.2); border: 2px solid white; color: white; border-radius: 25px; cursor: pointer; transition: all 0.3s; font-weight: 600; }
-        .tab:hover, .tab.active { background: white; color: #667eea; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        .chart-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .chart-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        .chart-card h3 { margin-bottom: 15px; color: #333; font-size: 1.1em; }
-        .chart-container { position: relative; height: 300px; }
-        
-        .table-section { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 30px; }
-        .table-section h2 { margin-bottom: 20px; color: #333; }
-        .controls { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        .controls input, .controls select { padding: 10px 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; flex: 1; min-width: 200px; }
-        
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 8px; text-align: left; font-weight: 600; }
-        td { padding: 10px 8px; border-bottom: 1px solid #eee; }
-        tr:hover { background: #f8f9fa; }
-        .number { text-align: right; font-family: 'Courier New', monospace; font-weight: 600; }
-        .project-cell { font-weight: 600; color: #333; }
-        .activity-cell { color: #666; font-size: 0.9em; max-width: 200px; white-space: normal; word-wrap: break-word; line-height: 1.4; }
-        .kashmir-col { color: #1565c0; font-weight: 600; background-color: #e3f2fd; border-radius: 4px; padding: 8px 6px; }
-        .jammu-col { color: #c62828; font-weight: 600; background-color: #ffebee; border-radius: 4px; padding: 8px 6px; }
-        .total-col { color: #2e7d32; font-weight: bold; background-color: #e8f5e9; border-radius: 4px; padding: 8px 6px; }
-        
-        footer { text-align: center; color: white; padding: 20px; opacity: 0.8; }
-        .last-updated { color: #666; font-size: 0.9em; margin-top: 10px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-card.kashmir {
+            border-left: 5px solid #3498db;
+        }
+
+        .stat-card.jammu {
+            border-left: 5px solid #e74c3c;
+        }
+
+        .stat-card.total {
+            border-left: 5px solid #27ae60;
+        }
+
+        .refresh-box {
+            background: white;
+            border-radius: 15px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .refresh-box button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .refresh-box button:hover {
+            opacity: 0.9;
+        }
+
+        .last-updated {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .tab:hover,
+        .tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .chart-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .chart-card h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .table-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .table-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .controls input,
+        .controls select {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .number {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .project-cell {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .activity-cell {
+            color: #666;
+            font-size: 0.9em;
+            max-width: 200px;
+            white-space: normal;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        .kashmir-col {
+            color: #1565c0;
+            font-weight: 600;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            padding: 8px 6px;
+        }
+
+        .jammu-col {
+            color: #c62828;
+            font-weight: 600;
+            background-color: #ffebee;
+            border-radius: 4px;
+            padding: 8px 6px;
+        }
+
+        .total-col {
+            color: #2e7d32;
+            font-weight: bold;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            padding: 8px 6px;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            opacity: 0.8;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <h1>🌾 Kisan Sathi Dashboard</h1>
-            <p>Jammu & Kashmir Agricultural Applications - Live from Google Sheets</p>
+            <p>Jammu & Kashmir Agricultural Applications - Live Data</p>
         </header>
-        
-        <div class="config-box" id="configPanel">
-            <h3>🔗 Connect to Google Sheets</h3>
-            <input type="text" id="sheetId" placeholder="Google Sheet ID (from URL)">
-            <input type="text" id="apiKey" placeholder="Google API Key">
-            <button onclick="connectToSheets()">Connect & Load Data</button>
-            <button onclick="loadData()" style="display:none;background:#27ae60" id="refreshBtn">🔄 Refresh</button>
-            <div class="help">
-                💡 <strong>How to get these:</strong><br>
-                1. Sheet ID: From your Google Sheet URL (between /d/ and /edit)<br>
-                2. API Key: From <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> → Enable Sheets API → Create API Key
-            </div>
-            <div class="last-updated" id="lastUpdated"></div>
-        </div>
-        
-        <div id="loadingState" class="loading" style="display:none">⏳ Loading...</div>
+
+        <div id="loadingState" class="loading">⏳ Loading data...</div>
         <div id="errorState" class="error" style="display:none"></div>
-        
+
         <div id="dashboardContent" style="display:none">
+            <div class="refresh-box">
+                <span class="last-updated" id="lastUpdated"></span>
+                <button onclick="loadData()">🔄 Refresh Data</button>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card kashmir">
                     <h3>🏔️ Kashmir Division</h3>
                     <div class="value" id="kashmir-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-appr">0</span> Appr (<span id="kashmir-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-appr">0</span> Appr (<span
+                            id="kashmir-rate">0%</span>)</div>
                 </div>
                 <div class="stat-card jammu">
                     <h3>🌄 Jammu Division</h3>
                     <div class="value" id="jammu-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top:8px;font-size:0.9em"><span id="jammu-appr">0</span> Appr (<span id="jammu-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="jammu-appr">0</span> Appr (<span
+                            id="jammu-rate">0%</span>)</div>
                 </div>
                 <div class="stat-card total">
                     <h3>📊 Grand Total</h3>
                     <div class="value" id="total-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top:8px;font-size:0.9em"><span id="total-appr">0</span> Appr (<span id="total-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="total-appr">0</span> Appr (<span
+                            id="total-rate">0%</span>)</div>
                 </div>
             </div>
-            
+
             <div class="tabs">
                 <div class="tab active" onclick="showTab('overview')">📊 Overview</div>
                 <div class="tab" onclick="showTab('activities')">📋 Activity Details</div>
             </div>
-            
+
             <div id="overview" class="tab-content active">
                 <div class="chart-section">
                     <div class="chart-card">
@@ -126,133 +352,167 @@
                     </div>
                 </div>
             </div>
-            
+
             <div id="activities" class="tab-content">
                 <div class="table-section">
                     <h2>📋 Project-wise Activity Details</h2>
                     <div class="controls">
                         <input type="text" id="searchInput" placeholder="🔍 Search project or activity...">
-                        <select id="projectFilter"><option value="">📁 All Projects</option></select>
+                        <select id="projectFilter">
+                            <option value="">📁 All Projects</option>
+                        </select>
                     </div>
                     <div id="activityTableContainer"></div>
                 </div>
             </div>
         </div>
-        
+
         <footer>
             <p>Data Source: Google Sheets | Auto-updates every 5 minutes</p>
         </footer>
     </div>
 
     <script>
-        // Configuration
-        const KASHMIR_DISTRICTS = ['ANANTNAG','BANDIPORA','BARAMULLA','BUDGAM','GANDERBAL','KULGAM','KUPWARA','PULWAMA','SHOPIAN','SRINAGAR'];
-        const JAMMU_DISTRICTS = ['DODA','JAMMU','KATHUA','KISHTWAR','POONCH','RAJOURI','RAMBAN','REASI','SAMBA','UDHAMPUR'];
-        
-        let sheetConfig = { sheetId: '', apiKey: '' };
-        let rawSheetData = [];  // Original server format
-        let targetsData = [];   // Targets data
-        let processedData = []; // Calculated K-Appl, J-Appl format
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CONFIGURATION - EDIT THESE VALUES
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        // Your Google Sheet ID (from URL: https://docs.google.com/spreadsheets/d/SHEET_ID/edit)
+        const SHEET_ID = '1VCR4YeCGJqMunaNdww3yyBY6JcxIn5CM7A-KDcTtVbY';
+
+        // Your Google API Key (from Google Cloud Console)
+        const API_KEY = 'AIzaSyCCOVdrw4MfiS43LM8yJ-lgQvk_irPAg08';
+
+        // IMPORTANT: Restrict your API key in Google Cloud Console:
+        // 1. Go to https://console.cloud.google.com/apis/credentials
+        // 2. Click your API key
+        // 3. Under "Application restrictions" → HTTP referrers
+        // 4. Add: *.github.io/* (or your specific domain)
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        const KASHMIR_DISTRICTS = ['ANANTNAG', 'BANDIPORA', 'BARAMULLA', 'BUDGAM', 'GANDERBAL', 'KULGAM', 'KUPWARA', 'PULWAMA', 'SHOPIAN', 'SRINAGAR'];
+        const JAMMU_DISTRICTS = ['DODA', 'JAMMU', 'KATHUA', 'KISHTWAR', 'POONCH', 'RAJOURI', 'RAMBAN', 'REASI', 'SAMBA', 'UDHAMPUR'];
+
+        let rawSheetData = [];
+        let targetsData = [];
+        let processedData = [];
         let charts = {};
-        
-        async function connectToSheets() {
-            sheetConfig.sheetId = document.getElementById('sheetId').value.trim();
-            sheetConfig.apiKey = document.getElementById('apiKey').value.trim();
-            if (!sheetConfig.sheetId || !sheetConfig.apiKey) {
-                alert('Please enter both Sheet ID and API Key');
-                return;
-            }
-            await loadData();
-        }
-        
+
+        // Auto-load on page load
+        document.addEventListener('DOMContentLoaded', loadData);
+
         async function loadData() {
             document.getElementById('loadingState').style.display = 'block';
             document.getElementById('errorState').style.display = 'none';
             document.getElementById('dashboardContent').style.display = 'none';
-            
+
+            // Check if credentials are configured
+            if (SHEET_ID === 'YOUR_SHEET_ID_HERE' || API_KEY === 'YOUR_API_KEY_HERE') {
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('errorState').style.display = 'block';
+                document.getElementById('errorState').innerHTML = `
+                    <strong>⚠️ Dashboard Not Configured</strong><br><br>
+                    Please edit the configuration section at the top of this file:<br>
+                    1. Open index.html in a text editor<br>
+                    2. Find "const SHEET_ID = 'YOUR_SHEET_ID_HERE'"<br>
+                    3. Replace with your actual Sheet ID and API Key<br>
+                    4. Save and re-upload to GitHub<br><br>
+                    <a href="#" onclick="showConfigHelp()">Click here for detailed setup instructions</a>
+                `;
+                return;
+            }
+
             try {
                 // Fetch Raw Data tab
                 const rawResponse = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${sheetConfig.sheetId}/values/Raw%20Data?key=${sheetConfig.apiKey}`
+                    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Raw%20Data?key=${API_KEY}`
                 );
-                
+
                 if (!rawResponse.ok) {
-                    throw new Error(`Raw Data error: ${rawResponse.status} - Make sure tab is named "Raw Data" and is shared as "Anyone with link can VIEW"`);
+                    const errorData = await rawResponse.json();
+                    throw new Error(`${errorData.error?.message || 'Unknown error'} - Check Sheet ID and API Key`);
                 }
-                
+
                 const rawJson = await rawResponse.json();
                 rawSheetData = rawJson.values;
-                
+
+                if (!rawSheetData || rawSheetData.length < 5) {
+                    throw new Error('Raw Data tab is empty or has wrong format');
+                }
+
                 // Process the raw server format
                 processedData = processRawData(rawSheetData);
-                
+
+                if (processedData.length === 0) {
+                    throw new Error('No data found after processing. Check sheet structure.');
+                }
+
                 // Fetch Targets tab
                 try {
                     const targetsResponse = await fetch(
-                        `https://sheets.googleapis.com/v4/spreadsheets/${sheetConfig.sheetId}/values/Targets?key=${sheetConfig.apiKey}`
+                        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Targets?key=${API_KEY}`
                     );
                     if (targetsResponse.ok) {
                         const targetsJson = await targetsResponse.json();
                         targetsData = parseSimpleData(targetsJson.values);
+                        console.log('Targets loaded:', targetsData.length, 'rows');
+                    } else {
+                        console.log('Targets tab not accessible');
+                        targetsData = [];
                     }
                 } catch (e) {
-                    console.log('Targets tab not found or empty');
+                    console.log('Error loading targets:', e);
                     targetsData = [];
                 }
-                
+
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('dashboardContent').style.display = 'block';
-                document.getElementById('refreshBtn').style.display = 'inline-block';
                 document.getElementById('lastUpdated').textContent = `Last updated: ${new Date().toLocaleString()}`;
-                
+
                 initDashboard();
-                
+
             } catch (error) {
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('errorState').style.display = 'block';
-                document.getElementById('errorState').innerHTML = `<strong>❌ Error:</strong> ${error.message}`;
-                console.error(error);
+                document.getElementById('errorState').innerHTML = `
+                    <strong>❌ Error loading data:</strong><br>
+                    ${error.message}<br><br>
+                    <strong>Troubleshooting:</strong><br>
+                    1. Verify Sheet ID is correct<br>
+                    2. Verify API Key is correct and Sheets API is enabled<br>
+                    3. Make sure sheet is shared as "Anyone with link can VIEW"<br>
+                    4. Check that "Raw Data" tab exists with correct structure
+                `;
+                console.error('Full error:', error);
             }
         }
-        
-        // Process raw server format (with district columns)
+
         function processRawData(values) {
-            if (!values || values.length < 5) return [];
-            
-            // Row 3 (index 2) has district names
-            // Row 4 (index 3) has metric names (TOTAL APPLICATIONS, etc.)
-            // Row 5+ (index 4+) has data
-            
             const districtRow = values[2];  // Row 3 - district names
             const dataRows = values.slice(4); // Row 5+ - actual data
-            
-            // Find column indices for each district
+
             const districtCols = {};
             districtRow.forEach((val, idx) => {
-                if (val && val.trim) {
-                    districtCols[val.trim()] = idx;
-                }
+                if (val && val.trim) districtCols[val.trim()] = idx;
             });
-            
+
             const processed = [];
-            
+
             dataRows.forEach(row => {
-                if (!row[0]) return; // Skip empty rows
-                
+                if (!row[0]) return;
+
                 const project = row[0];
                 const activity = row[1] || '';
-                
-                // Calculate Kashmir totals
+
                 let kAppl = 0, kAppr = 0;
                 KASHMIR_DISTRICTS.forEach(d => {
                     if (districtCols[d] !== undefined) {
                         const col = districtCols[d];
                         kAppl += parseInt(row[col]) || 0;
-                        kAppr += parseInt(row[col + 1]) || 0; // APPROVED is next column
+                        kAppr += parseInt(row[col + 1]) || 0;
                     }
                 });
-                
-                // Calculate Jammu totals
+
                 let jAppl = 0, jAppr = 0;
                 JAMMU_DISTRICTS.forEach(d => {
                     if (districtCols[d] !== undefined) {
@@ -261,7 +521,7 @@
                         jAppr += parseInt(row[col + 1]) || 0;
                     }
                 });
-                
+
                 processed.push({
                     Project: project,
                     Activity: activity,
@@ -273,17 +533,16 @@
                     'Total-Appr': kAppr + jAppr
                 });
             });
-            
+
             return processed;
         }
-        
-        // Parse simple 2D data (for targets)
+
         function parseSimpleData(values) {
             if (!values || values.length < 2) return [];
             const headers = values[0].map(h => String(h || '').trim());
             const data = [];
             for (let i = 1; i < values.length; i++) {
-                if (!values[i][0]) continue;
+                if (!values[i] || !values[i][0]) continue;
                 const row = {};
                 headers.forEach((h, idx) => {
                     row[h] = values[i][idx] !== undefined ? String(values[i][idx]) : '';
@@ -292,36 +551,47 @@
             }
             return data;
         }
-        
+
         function getTarget(project, activity) {
-            if (!project || !activity || !targetsData.length) return '-';
-            const proj = String(project).toLowerCase();
-            const act = String(activity).toLowerCase();
-            
-            const match = targetsData.find(t => {
-                const tProj = String(t.Project || t.project || '').toLowerCase();
-                const tAct = String(t.Activity || t.activity || '').toLowerCase();
-                return proj.includes(tProj) || tProj.includes(proj) ||
-                       (act && tAct && (act.includes(tAct) || tAct.includes(act)));
+            if (!project || !activity || !targetsData || targetsData.length === 0) return '-';
+
+            const proj = String(project).toLowerCase().trim();
+            const act = String(activity).toLowerCase().trim();
+
+            // Try exact match first
+            let match = targetsData.find(t => {
+                const tProj = String(t.Project || '').toLowerCase().trim();
+                const tAct = String(t.Activity || '').toLowerCase().trim();
+                return proj === tProj && act === tAct;
             });
-            
+
+            // Try partial match
+            if (!match) {
+                match = targetsData.find(t => {
+                    const tProj = String(t.Project || '').toLowerCase().trim();
+                    const tAct = String(t.Activity || '').toLowerCase().trim();
+                    return (proj.includes(tProj) || tProj.includes(proj)) &&
+                        (act.includes(tAct) || tAct.includes(act));
+                });
+            }
+
             if (match) {
-                const target = match.Target || match.target || '';
-                const unit = match.Unit || match.unit || '';
+                const target = match.Target || '';
+                const unit = match.Unit || '';
                 if (target && unit) return target + ' ' + unit;
                 if (target) return target;
                 if (unit) return unit;
             }
             return '-';
         }
-        
+
         function initDashboard() {
             calculateTotals();
             initCharts();
             populateFilters();
             renderActivityTable();
         }
-        
+
         function calculateTotals() {
             let kApps = 0, kAppr = 0, jApps = 0, jAppr = 0;
             processedData.forEach(row => {
@@ -330,69 +600,69 @@
                 jApps += row['J-Appl'];
                 jAppr += row['J-Appr'];
             });
-            
+
             document.getElementById('kashmir-apps').textContent = kApps.toLocaleString();
             document.getElementById('kashmir-appr').textContent = kAppr.toLocaleString();
-            document.getElementById('kashmir-rate').textContent = kApps > 0 ? ((kAppr/kApps)*100).toFixed(1) + '%' : '0%';
-            
+            document.getElementById('kashmir-rate').textContent = kApps > 0 ? ((kAppr / kApps) * 100).toFixed(1) + '%' : '0%';
+
             document.getElementById('jammu-apps').textContent = jApps.toLocaleString();
             document.getElementById('jammu-appr').textContent = jAppr.toLocaleString();
-            document.getElementById('jammu-rate').textContent = jApps > 0 ? ((jAppr/jApps)*100).toFixed(1) + '%' : '0%';
-            
+            document.getElementById('jammu-rate').textContent = jApps > 0 ? ((jAppr / jApps) * 100).toFixed(1) + '%' : '0%';
+
             document.getElementById('total-apps').textContent = (kApps + jApps).toLocaleString();
             document.getElementById('total-appr').textContent = (kAppr + jAppr).toLocaleString();
-            document.getElementById('total-rate').textContent = (kApps + jApps) > 0 ? (((kAppr+jAppr)/(kApps+jApps))*100).toFixed(1) + '%' : '0%';
+            document.getElementById('total-rate').textContent = (kApps + jApps) > 0 ? (((kAppr + jAppr) / (kApps + jApps)) * 100).toFixed(1) + '%' : '0%';
         }
-        
+
         function initCharts() {
             if (charts.division) charts.division.destroy();
             if (charts.project) charts.project.destroy();
-            
+
             let kTotal = 0, jTotal = 0;
             processedData.forEach(row => {
                 kTotal += row['K-Appl'];
                 jTotal += row['J-Appl'];
             });
-            
+
             charts.division = new Chart(document.getElementById('divisionChart'), {
                 type: 'doughnut',
                 data: { labels: ['Kashmir Division', 'Jammu Division'], datasets: [{ data: [kTotal, jTotal], backgroundColor: ['#3498db', '#e74c3c'] }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });
-            
+
             const projectTotals = {};
             processedData.forEach(row => {
                 if (!projectTotals[row.Project]) projectTotals[row.Project] = 0;
                 projectTotals[row.Project] += row['Total-Appl'];
             });
-            const sorted = Object.entries(projectTotals).sort((a,b) => b[1] - a[1]).slice(0, 10);
-            
+            const sorted = Object.entries(projectTotals).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
             charts.project = new Chart(document.getElementById('projectChart'), {
                 type: 'bar',
                 data: { labels: sorted.map(p => p[0].substring(0, 25) + '...'), datasets: [{ label: 'Appl', data: sorted.map(p => p[1]), backgroundColor: '#667eea' }] },
                 options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
             });
         }
-        
+
         function populateFilters() {
             const projects = [...new Set(processedData.map(r => r.Project))].filter(p => p).sort();
             const select = document.getElementById('projectFilter');
             select.innerHTML = '<option value="">📁 All Projects</option>';
             projects.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; select.appendChild(opt); });
-            
+
             document.getElementById('searchInput').addEventListener('input', renderActivityTable);
             document.getElementById('projectFilter').addEventListener('change', renderActivityTable);
         }
-        
+
         function renderActivityTable() {
             const container = document.getElementById('activityTableContainer');
             const search = document.getElementById('searchInput')?.value?.toLowerCase() || '';
             const project = document.getElementById('projectFilter')?.value || '';
-            
+
             let filtered = processedData;
             if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
             if (project) filtered = filtered.filter(r => r.Project === project);
-            
+
             let html = '<table><thead><tr>';
             html += '<th>Project</th><th style="width:180px;">Activity</th>';
             html += '<th class="number kashmir-col">🏔️ K-Appl</th>';
@@ -403,7 +673,7 @@
             html += '<th class="number total-col">📊 Total Appr</th>';
             html += '<th class="number" style="background:linear-gradient(135deg,#7b1fa2,#6a1b9a);color:white">🎯 5-Year Target</th>';
             html += '</tr></thead><tbody>';
-            
+
             filtered.forEach(row => {
                 const tgt = getTarget(row.Project, row.Activity);
                 html += `<tr>
@@ -418,20 +688,45 @@
                     <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:600">${tgt}</td>
                 </tr>`;
             });
-            
+
             html += '</tbody></table>';
             container.innerHTML = html;
         }
-        
+
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
         }
-        
+
+        function showConfigHelp() {
+            alert(`Setup Instructions:
+
+1. Get Sheet ID:
+   - Open your Google Sheet
+   - Copy the ID from URL (between /d/ and /edit)
+   - Example: 1ABC123xyz...
+
+2. Get API Key:
+   - Go to console.cloud.google.com
+   - Create project → Enable Sheets API
+   - Create API Key
+
+3. Edit index.html:
+   - Open in text editor
+   - Find SHEET_ID and API_KEY
+   - Replace with your values
+
+4. Restrict API Key (important!):
+   - In Cloud Console, click your API key
+   - HTTP referrers → Add your domain
+   - Example: *.github.io/*`);
+        }
+
         // Auto-refresh every 5 minutes
-        setInterval(() => { if (sheetConfig.sheetId && sheetConfig.apiKey) loadData(); }, 300000);
+        setInterval(() => { if (SHEET_ID !== 'YOUR_SHEET_ID_HERE') loadData(); }, 300000);
     </script>
 </body>
+
 </html>
