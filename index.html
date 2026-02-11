@@ -576,8 +576,8 @@
             }
 
             if (match) {
-                const target = match.Target || '';
-                const unit = match.Unit || '';
+                const target = match['5-Year Targets'] || match['5-Year Target'] || match.Target || match.target || '';
+                const unit = match.Units || match.Unit || match.units || match.unit || '';
                 if (target && unit) return target + ' ' + unit;
                 if (target) return target;
                 if (unit) return unit;
