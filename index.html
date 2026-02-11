@@ -16,7 +16,7 @@
         .config-box { background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
         .config-box h3 { margin-bottom: 15px; color: #333; }
         .config-box input { width: 100%; padding: 10px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 8px; }
-        .config-box button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; }
+        .config-box button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; margin-right: 10px; }
         .config-box button:hover { opacity: 0.9; }
         .config-box .help { color: #666; font-size: 0.9em; margin-top: 10px; }
         
@@ -60,8 +60,6 @@
         .total-col { color: #2e7d32; font-weight: bold; background-color: #e8f5e9; border-radius: 4px; padding: 8px 6px; }
         
         footer { text-align: center; color: white; padding: 20px; opacity: 0.8; }
-        
-        .refresh-btn { background: #27ae60; color: white; padding: 8px 20px; border: none; border-radius: 20px; cursor: pointer; margin-left: 10px; }
         .last-updated { color: #666; font-size: 0.9em; margin-top: 10px; }
     </style>
 </head>
@@ -69,52 +67,45 @@
     <div class="container">
         <header>
             <h1>🌾 Kisan Sathi Dashboard</h1>
-            <p>Jammu & Kashmir Agricultural Applications - Live Data from Google Sheets</p>
+            <p>Jammu & Kashmir Agricultural Applications - Live from Google Sheets</p>
         </header>
         
-        <!-- Configuration Panel -->
         <div class="config-box" id="configPanel">
             <h3>🔗 Connect to Google Sheets</h3>
             <input type="text" id="sheetId" placeholder="Google Sheet ID (from URL)">
             <input type="text" id="apiKey" placeholder="Google API Key">
             <button onclick="connectToSheets()">Connect & Load Data</button>
-            <button class="refresh-btn" onclick="loadData()" style="display:none" id="refreshBtn">🔄 Refresh Data</button>
+            <button onclick="loadData()" style="display:none;background:#27ae60" id="refreshBtn">🔄 Refresh</button>
             <div class="help">
                 💡 <strong>How to get these:</strong><br>
-                1. Sheet ID: Copy from your Google Sheet URL (between /d/ and /edit)<br>
-                2. API Key: Get from <a href="https://console.cloud.google.com/" target="_blank" style="color:#667eea">Google Cloud Console</a> → Enable Sheets API → Create Credentials
+                1. Sheet ID: From your Google Sheet URL (between /d/ and /edit)<br>
+                2. API Key: From <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> → Enable Sheets API → Create API Key
             </div>
             <div class="last-updated" id="lastUpdated"></div>
         </div>
         
-        <!-- Loading State -->
-        <div id="loadingState" class="loading" style="display:none">
-            <div>⏳ Loading data from Google Sheets...</div>
-        </div>
-        
-        <!-- Error State -->
+        <div id="loadingState" class="loading" style="display:none">⏳ Loading...</div>
         <div id="errorState" class="error" style="display:none"></div>
         
-        <!-- Dashboard Content -->
         <div id="dashboardContent" style="display:none">
             <div class="stats-grid">
                 <div class="stat-card kashmir">
                     <h3>🏔️ Kashmir Division</h3>
                     <div class="value" id="kashmir-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top: 8px; font-size: 0.9em;"><span id="kashmir-appr">0</span> Appr (<span id="kashmir-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-appr">0</span> Appr (<span id="kashmir-rate">0%</span>)</div>
                 </div>
                 <div class="stat-card jammu">
                     <h3>🌄 Jammu Division</h3>
                     <div class="value" id="jammu-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top: 8px; font-size: 0.9em;"><span id="jammu-appr">0</span> Appr (<span id="jammu-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="jammu-appr">0</span> Appr (<span id="jammu-rate">0%</span>)</div>
                 </div>
                 <div class="stat-card total">
                     <h3>📊 Grand Total</h3>
                     <div class="value" id="total-apps">0</div>
                     <p>Appl</p>
-                    <div style="margin-top: 8px; font-size: 0.9em;"><span id="total-appr">0</span> Appr (<span id="total-rate">0%</span>)</div>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="total-appr">0</span> Appr (<span id="total-rate">0%</span>)</div>
                 </div>
             </div>
             
@@ -149,36 +140,31 @@
         </div>
         
         <footer>
-            <p>Data Source: Google Sheets | Auto-updates when sheet changes</p>
+            <p>Data Source: Google Sheets | Auto-updates every 5 minutes</p>
         </footer>
     </div>
 
     <script>
-        // Global variables
-        let rawData = [];
-        let targetsData = [];
+        // Configuration
+        const KASHMIR_DISTRICTS = ['ANANTNAG','BANDIPORA','BARAMULLA','BUDGAM','GANDERBAL','KULGAM','KUPWARA','PULWAMA','SHOPIAN','SRINAGAR'];
+        const JAMMU_DISTRICTS = ['DODA','JAMMU','KATHUA','KISHTWAR','POONCH','RAJOURI','RAMBAN','REASI','SAMBA','UDHAMPUR'];
+        
+        let sheetConfig = { sheetId: '', apiKey: '' };
+        let rawSheetData = [];  // Original server format
+        let targetsData = [];   // Targets data
+        let processedData = []; // Calculated K-Appl, J-Appl format
         let charts = {};
         
-        // Sheet configuration (stored in memory)
-        let sheetConfig = {
-            sheetId: '',
-            apiKey: ''
-        };
-        
-        // Connect to Google Sheets
         async function connectToSheets() {
             sheetConfig.sheetId = document.getElementById('sheetId').value.trim();
             sheetConfig.apiKey = document.getElementById('apiKey').value.trim();
-            
             if (!sheetConfig.sheetId || !sheetConfig.apiKey) {
                 alert('Please enter both Sheet ID and API Key');
                 return;
             }
-            
             await loadData();
         }
         
-        // Load data from Google Sheets
         async function loadData() {
             document.getElementById('loadingState').style.display = 'block';
             document.getElementById('errorState').style.display = 'none';
@@ -191,71 +177,137 @@
                 );
                 
                 if (!rawResponse.ok) {
-                    throw new Error(`Raw Data error: ${rawResponse.status} - Make sure tab is named "Raw Data"`);
+                    throw new Error(`Raw Data error: ${rawResponse.status} - Make sure tab is named "Raw Data" and is shared as "Anyone with link can VIEW"`);
                 }
                 
                 const rawJson = await rawResponse.json();
-                rawData = parseSheetData(rawJson.values);
+                rawSheetData = rawJson.values;
+                
+                // Process the raw server format
+                processedData = processRawData(rawSheetData);
                 
                 // Fetch Targets tab
-                const targetsResponse = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${sheetConfig.sheetId}/values/Targets?key=${sheetConfig.apiKey}`
-                );
-                
-                if (!targetsResponse.ok) {
-                    throw new Error(`Targets error: ${targetsResponse.status} - Make sure tab is named "Targets"`);
+                try {
+                    const targetsResponse = await fetch(
+                        `https://sheets.googleapis.com/v4/spreadsheets/${sheetConfig.sheetId}/values/Targets?key=${sheetConfig.apiKey}`
+                    );
+                    if (targetsResponse.ok) {
+                        const targetsJson = await targetsResponse.json();
+                        targetsData = parseSimpleData(targetsJson.values);
+                    }
+                } catch (e) {
+                    console.log('Targets tab not found or empty');
+                    targetsData = [];
                 }
                 
-                const targetsJson = await targetsResponse.json();
-                targetsData = parseSheetData(targetsJson.values);
-                
-                // Show dashboard
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('dashboardContent').style.display = 'block';
                 document.getElementById('refreshBtn').style.display = 'inline-block';
                 document.getElementById('lastUpdated').textContent = `Last updated: ${new Date().toLocaleString()}`;
                 
-                // Initialize dashboard
-                calculateTotals();
-                initCharts();
-                populateFilters();
-                renderActivityTable();
+                initDashboard();
                 
             } catch (error) {
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('errorState').style.display = 'block';
-                document.getElementById('errorState').textContent = `❌ Error: ${error.message}`;
+                document.getElementById('errorState').innerHTML = `<strong>❌ Error:</strong> ${error.message}`;
                 console.error(error);
             }
         }
         
-        // Parse Google Sheets data
-        function parseSheetData(values) {
+        // Process raw server format (with district columns)
+        function processRawData(values) {
+            if (!values || values.length < 5) return [];
+            
+            // Row 3 (index 2) has district names
+            // Row 4 (index 3) has metric names (TOTAL APPLICATIONS, etc.)
+            // Row 5+ (index 4+) has data
+            
+            const districtRow = values[2];  // Row 3 - district names
+            const dataRows = values.slice(4); // Row 5+ - actual data
+            
+            // Find column indices for each district
+            const districtCols = {};
+            districtRow.forEach((val, idx) => {
+                if (val && val.trim) {
+                    districtCols[val.trim()] = idx;
+                }
+            });
+            
+            const processed = [];
+            
+            dataRows.forEach(row => {
+                if (!row[0]) return; // Skip empty rows
+                
+                const project = row[0];
+                const activity = row[1] || '';
+                
+                // Calculate Kashmir totals
+                let kAppl = 0, kAppr = 0;
+                KASHMIR_DISTRICTS.forEach(d => {
+                    if (districtCols[d] !== undefined) {
+                        const col = districtCols[d];
+                        kAppl += parseInt(row[col]) || 0;
+                        kAppr += parseInt(row[col + 1]) || 0; // APPROVED is next column
+                    }
+                });
+                
+                // Calculate Jammu totals
+                let jAppl = 0, jAppr = 0;
+                JAMMU_DISTRICTS.forEach(d => {
+                    if (districtCols[d] !== undefined) {
+                        const col = districtCols[d];
+                        jAppl += parseInt(row[col]) || 0;
+                        jAppr += parseInt(row[col + 1]) || 0;
+                    }
+                });
+                
+                processed.push({
+                    Project: project,
+                    Activity: activity,
+                    'K-Appl': kAppl,
+                    'J-Appl': jAppl,
+                    'K-Appr': kAppr,
+                    'J-Appr': jAppr,
+                    'Total-Appl': kAppl + jAppl,
+                    'Total-Appr': kAppr + jAppr
+                });
+            });
+            
+            return processed;
+        }
+        
+        // Parse simple 2D data (for targets)
+        function parseSimpleData(values) {
             if (!values || values.length < 2) return [];
-            
-            const headers = values[0];
+            const headers = values[0].map(h => String(h || '').trim());
             const data = [];
-            
             for (let i = 1; i < values.length; i++) {
+                if (!values[i][0]) continue;
                 const row = {};
-                headers.forEach((header, index) => {
-                    row[header] = values[i][index] || '';
+                headers.forEach((h, idx) => {
+                    row[h] = values[i][idx] !== undefined ? String(values[i][idx]) : '';
                 });
                 data.push(row);
             }
-            
             return data;
         }
         
-        // Get target for activity
         function getTarget(project, activity) {
-            const match = targetsData.find(t => 
-                project.toLowerCase().includes((t.Project || '').toLowerCase()) &&
-                activity.toLowerCase().includes((t.Activity || '').toLowerCase())
-            );
+            if (!project || !activity || !targetsData.length) return '-';
+            const proj = String(project).toLowerCase();
+            const act = String(activity).toLowerCase();
+            
+            const match = targetsData.find(t => {
+                const tProj = String(t.Project || t.project || '').toLowerCase();
+                const tAct = String(t.Activity || t.activity || '').toLowerCase();
+                return proj.includes(tProj) || tProj.includes(proj) ||
+                       (act && tAct && (act.includes(tAct) || tAct.includes(act)));
+            });
+            
             if (match) {
-                const target = match.Target || '';
-                const unit = match.Unit || '';
+                const target = match.Target || match.target || '';
+                const unit = match.Unit || match.unit || '';
                 if (target && unit) return target + ' ' + unit;
                 if (target) return target;
                 if (unit) return unit;
@@ -263,15 +315,20 @@
             return '-';
         }
         
-        // Calculate totals
+        function initDashboard() {
+            calculateTotals();
+            initCharts();
+            populateFilters();
+            renderActivityTable();
+        }
+        
         function calculateTotals() {
             let kApps = 0, kAppr = 0, jApps = 0, jAppr = 0;
-            
-            rawData.forEach(row => {
-                kApps += parseInt(row['K-Appl'] || row['Kashmir_Total_Appl'] || 0);
-                kAppr += parseInt(row['K-Appr'] || row['Kashmir_Total_Appr'] || 0);
-                jApps += parseInt(row['J-Appl'] || row['Jammu_Total_Appl'] || 0);
-                jAppr += parseInt(row['J-Appr'] || row['Jammu_Total_Appr'] || 0);
+            processedData.forEach(row => {
+                kApps += row['K-Appl'];
+                kAppr += row['K-Appr'];
+                jApps += row['J-Appl'];
+                jAppr += row['J-Appr'];
             });
             
             document.getElementById('kashmir-apps').textContent = kApps.toLocaleString();
@@ -287,103 +344,54 @@
             document.getElementById('total-rate').textContent = (kApps + jApps) > 0 ? (((kAppr+jAppr)/(kApps+jApps))*100).toFixed(1) + '%' : '0%';
         }
         
-        // Initialize charts
         function initCharts() {
-            // Destroy existing charts
             if (charts.division) charts.division.destroy();
             if (charts.project) charts.project.destroy();
             
-            // Calculate totals
             let kTotal = 0, jTotal = 0;
-            rawData.forEach(row => {
-                kTotal += parseInt(row['K-Appl'] || row['Kashmir_Total_Appl'] || 0);
-                jTotal += parseInt(row['J-Appl'] || row['Jammu_Total_Appl'] || 0);
+            processedData.forEach(row => {
+                kTotal += row['K-Appl'];
+                jTotal += row['J-Appl'];
             });
             
-            // Division chart
-            const divCtx = document.getElementById('divisionChart').getContext('2d');
-            charts.division = new Chart(divCtx, {
+            charts.division = new Chart(document.getElementById('divisionChart'), {
                 type: 'doughnut',
-                data: {
-                    labels: ['Kashmir Division', 'Jammu Division'],
-                    datasets: [{
-                        data: [kTotal, jTotal],
-                        backgroundColor: ['#3498db', '#e74c3c']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } }
-                }
+                data: { labels: ['Kashmir Division', 'Jammu Division'], datasets: [{ data: [kTotal, jTotal], backgroundColor: ['#3498db', '#e74c3c'] }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });
             
-            // Project chart
             const projectTotals = {};
-            rawData.forEach(row => {
-                const proj = row.Project || row.project || '';
-                if (proj) {
-                    if (!projectTotals[proj]) projectTotals[proj] = 0;
-                    projectTotals[proj] += parseInt(row['Total-Appl'] || row['Grand_Total_Appl'] || 
-                                                    row['K-Appl'] || row['Kashmir_Total_Appl'] || 0) +
-                                          parseInt(row['J-Appl'] || row['Jammu_Total_Appl'] || 0);
-                }
+            processedData.forEach(row => {
+                if (!projectTotals[row.Project]) projectTotals[row.Project] = 0;
+                projectTotals[row.Project] += row['Total-Appl'];
             });
-            
             const sorted = Object.entries(projectTotals).sort((a,b) => b[1] - a[1]).slice(0, 10);
             
-            const projCtx = document.getElementById('projectChart').getContext('2d');
-            charts.project = new Chart(projCtx, {
+            charts.project = new Chart(document.getElementById('projectChart'), {
                 type: 'bar',
-                data: {
-                    labels: sorted.map(p => p[0].substring(0, 25) + '...'),
-                    datasets: [{
-                        label: 'Appl',
-                        data: sorted.map(p => p[1]),
-                        backgroundColor: '#667eea'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: { legend: { display: false } }
-                }
+                data: { labels: sorted.map(p => p[0].substring(0, 25) + '...'), datasets: [{ label: 'Appl', data: sorted.map(p => p[1]), backgroundColor: '#667eea' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
             });
         }
         
-        // Populate filters
         function populateFilters() {
-            const projects = [...new Set(rawData.map(r => r.Project || r.project))].filter(p => p).sort();
+            const projects = [...new Set(processedData.map(r => r.Project))].filter(p => p).sort();
             const select = document.getElementById('projectFilter');
             select.innerHTML = '<option value="">📁 All Projects</option>';
-            projects.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p;
-                opt.textContent = p;
-                select.appendChild(opt);
-            });
+            projects.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; select.appendChild(opt); });
             
             document.getElementById('searchInput').addEventListener('input', renderActivityTable);
             document.getElementById('projectFilter').addEventListener('change', renderActivityTable);
         }
         
-        // Render activity table
         function renderActivityTable() {
             const container = document.getElementById('activityTableContainer');
             const search = document.getElementById('searchInput')?.value?.toLowerCase() || '';
             const project = document.getElementById('projectFilter')?.value || '';
             
-            let filtered = rawData;
-            if (search) {
-                filtered = filtered.filter(r => 
-                    ((r.Project || r.project || '').toLowerCase().includes(search)) ||
-                    ((r.Activity || r.activity || '').toLowerCase().includes(search))
-                );
-            }
-            if (project) {
-                filtered = filtered.filter(r => (r.Project || r.project) === project);
-            }
+            let filtered = processedData;
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
             
             let html = '<table><thead><tr>';
             html += '<th>Project</th><th style="width:180px;">Activity</th>';
@@ -397,23 +405,16 @@
             html += '</tr></thead><tbody>';
             
             filtered.forEach(row => {
-                const kA = parseInt(row['K-Appl'] || row['Kashmir_Total_Appl'] || 0);
-                const kAp = parseInt(row['K-Appr'] || row['Kashmir_Total_Appr'] || 0);
-                const jA = parseInt(row['J-Appl'] || row['Jammu_Total_Appl'] || 0);
-                const jAp = parseInt(row['J-Appr'] || row['Jammu_Total_Appr'] || 0);
-                const tA = kA + jA;
-                const tAp = kAp + jAp;
-                const tgt = getTarget(row.Project || row.project, row.Activity || row.activity);
-                
+                const tgt = getTarget(row.Project, row.Activity);
                 html += `<tr>
-                    <td class="project-cell">${row.Project || row.project || ''}</td>
-                    <td class="activity-cell">${row.Activity || row.activity || ''}</td>
-                    <td class="number kashmir-col">${kA.toLocaleString()}</td>
-                    <td class="number jammu-col">${jA.toLocaleString()}</td>
-                    <td class="number" style="color:#e65100;background:#fff3e0;font-weight:600">${tA.toLocaleString()}</td>
-                    <td class="number kashmir-col">${kAp.toLocaleString()}</td>
-                    <td class="number jammu-col">${jAp.toLocaleString()}</td>
-                    <td class="number total-col">${tAp.toLocaleString()}</td>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number kashmir-col">${row['K-Appl'].toLocaleString()}</td>
+                    <td class="number jammu-col">${row['J-Appl'].toLocaleString()}</td>
+                    <td class="number" style="color:#e65100;background:#fff3e0;font-weight:600">${row['Total-Appl'].toLocaleString()}</td>
+                    <td class="number kashmir-col">${row['K-Appr'].toLocaleString()}</td>
+                    <td class="number jammu-col">${row['J-Appr'].toLocaleString()}</td>
+                    <td class="number total-col">${row['Total-Appr'].toLocaleString()}</td>
                     <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:600">${tgt}</td>
                 </tr>`;
             });
@@ -422,7 +423,6 @@
             container.innerHTML = html;
         }
         
-        // Tab switching
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -431,11 +431,7 @@
         }
         
         // Auto-refresh every 5 minutes
-        setInterval(() => {
-            if (sheetConfig.sheetId && sheetConfig.apiKey) {
-                loadData();
-            }
-        }, 300000); // 5 minutes
+        setInterval(() => { if (sheetConfig.sheetId && sheetConfig.apiKey) loadData(); }, 300000);
     </script>
 </body>
 </html>
