@@ -251,12 +251,16 @@
         .project-cell {
             font-weight: 600;
             color: #333;
+            width: 20%;
+            white-space: normal;
+            word-wrap: break-word;
+            line-height: 1.4;
         }
 
         .activity-cell {
             color: #666;
             font-size: 0.9em;
-            max-width: 200px;
+            width: 20%;
             white-space: normal;
             word-wrap: break-word;
             line-height: 1.4;
@@ -664,14 +668,15 @@
             if (project) filtered = filtered.filter(r => r.Project === project);
 
             let html = '<table><thead><tr>';
-            html += '<th>Project</th><th style="width:180px;">Activity</th>';
-            html += '<th class="number kashmir-col">🏔️ K-Appl</th>';
-            html += '<th class="number jammu-col">🌄 J-Appl</th>';
-            html += '<th class="number" style="background:linear-gradient(135deg,#ff9800,#f57c00);color:white">📊 Total-Appl</th>';
-            html += '<th class="number kashmir-col">🏔️ K-Appr</th>';
-            html += '<th class="number jammu-col">🌄 J-Appr</th>';
-            html += '<th class="number total-col">📊 Total Appr</th>';
-            html += '<th class="number" style="background:linear-gradient(135deg,#7b1fa2,#6a1b9a);color:white">🎯 5-Year Target</th>';
+            html += '<th style="width:20%;white-space:normal;line-height:1.3;">Project</th>';
+            html += '<th style="width:20%;white-space:normal;line-height:1.3;">Activity</th>';
+            html += '<th class="number" style="background:#1565c0;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">🏔️<br>Kmr<br>Applications</th>';
+            html += '<th class="number" style="background:#c62828;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">🌄<br>Jmu<br>Applications</th>';
+            html += '<th class="number" style="background:#1a237e;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">📊<br>Total<br>Applications</th>';
+            html += '<th class="number" style="background:#0d47a1;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">🏔️<br>Kmr<br>Approvals</th>';
+            html += '<th class="number" style="background:#b71c1c;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">🌄<br>Jmu<br>Approvals</th>';
+            html += '<th class="number" style="background:#1b5e20;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">📊<br>Total<br>Approvals</th>';
+            html += '<th class="number" style="background:#4a148c;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">🎯<br>5-Year<br>Targets</th>';
             html += '</tr></thead><tbody>';
 
             filtered.forEach(row => {
@@ -679,13 +684,13 @@
                 html += `<tr>
                     <td class="project-cell">${row.Project}</td>
                     <td class="activity-cell">${row.Activity}</td>
-                    <td class="number kashmir-col">${row['K-Appl'].toLocaleString()}</td>
-                    <td class="number jammu-col">${row['J-Appl'].toLocaleString()}</td>
-                    <td class="number" style="color:#e65100;background:#fff3e0;font-weight:600">${row['Total-Appl'].toLocaleString()}</td>
-                    <td class="number kashmir-col">${row['K-Appr'].toLocaleString()}</td>
-                    <td class="number jammu-col">${row['J-Appr'].toLocaleString()}</td>
-                    <td class="number total-col">${row['Total-Appr'].toLocaleString()}</td>
-                    <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:600">${tgt}</td>
+                    <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${row['K-Appl'].toLocaleString()}</td>
+                    <td class="number" style="color:#c62828;background:#ffebee;font-weight:600">${row['J-Appl'].toLocaleString()}</td>
+                    <td class="number" style="color:#1a237e;background:#e8eaf6;font-weight:700">${row['Total-Appl'].toLocaleString()}</td>
+                    <td class="number" style="color:#0d47a1;background:#e3f2fd;font-weight:600">${row['K-Appr'].toLocaleString()}</td>
+                    <td class="number" style="color:#b71c1c;background:#ffebee;font-weight:600">${row['J-Appr'].toLocaleString()}</td>
+                    <td class="number" style="color:#1b5e20;background:#e8f5e9;font-weight:700">${row['Total-Appr'].toLocaleString()}</td>
+                    <td class="number" style="color:#4a148c;background:#f3e5f5;font-weight:700">${tgt}</td>
                 </tr>`;
             });
 
