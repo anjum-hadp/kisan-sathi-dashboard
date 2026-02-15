@@ -156,6 +156,62 @@
             color: #667eea;
         }
 
+        /* Tabs inside white-background sections (like District View) */
+        .table-section .tabs .tab {
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+
+        .table-section .tabs .tab:hover,
+        .table-section .tabs .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Subdued stat boxes inside tabs (District View sections) */
+        .table-section .stats-grid {
+            gap: 10px;
+        }
+
+        .table-section .stat-card {
+            padding: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transform: none !important;
+        }
+
+        .table-section .stat-card:hover {
+            transform: none !important;
+        }
+
+        .table-section .stat-card h3 {
+            font-size: 0.75em;
+            margin-bottom: 5px;
+        }
+
+        .table-section .stat-card .value {
+            font-size: 1.5em;
+        }
+
+        .table-section .stat-card p {
+            font-size: 0.8em;
+        }
+
+        .table-section .stat-card.kashmir {
+            border-left: 3px solid rgba(52, 152, 219, 0.5);
+            background: rgba(52, 152, 219, 0.05);
+        }
+
+        .table-section .stat-card.jammu {
+            border-left: 3px solid rgba(231, 76, 60, 0.5);
+            background: rgba(231, 76, 60, 0.05);
+        }
+
+        .table-section .stat-card.total {
+            border-left: 3px solid rgba(39, 174, 96, 0.5);
+            background: rgba(39, 174, 96, 0.05);
+        }
+
         .tab-content {
             display: none;
         }
