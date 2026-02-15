@@ -563,9 +563,15 @@
             });
 
             // Merge Estab data
-            processed.forEach(row => {
+            console.log('Merging estab data. Estab entries:', estabData.length);
+            console.log('Sample estab:', estabData.slice(0, 2));
+            
+            processed.forEach((row, idx) => {
                 const estabTotal = getEstabValue(row.Project, row.Activity);
                 row['Estab'] = estabTotal;
+                if (idx < 3) {
+                    console.log('Row', idx, ':', row.Project, '|', row.Activity, '| Estab:', estabTotal);
+                }
             });
 
             return processed;
@@ -617,31 +623,45 @@
         }
 
         function getEstabValue(project, activity) {
-            if (!estabData || estabData.length === 0) return '-';
+            if (!estabData || estabData.length === 0) {
+                console.log('No estab data available');
+                return '-';
+            }
             
             const proj = String(project).toLowerCase().trim();
             const act = String(activity).toLowerCase().trim();
+            
+            // Debug for specific activities
+            const debug = activity.includes('Polyhouses') || activity.includes('CSP');
+            if (debug) console.log('Looking for:', proj, '|', act);
             
             // Find all matching rows and sum their totals
             let total = 0;
             let found = false;
             
-            estabData.forEach(row => {
+            estabData.forEach((row, idx) => {
                 const eProj = String(row.Project).toLowerCase().trim();
                 const eActNorm = String(row.NormalizedActivity).toLowerCase().trim();
                 const eActFull = String(row.Activity).toLowerCase().trim();
                 
-                // Match by project and normalized activity
-                const projMatch = (proj === eProj) || (proj.includes(eProj) || eProj.includes(proj));
-                const actMatch = (act === eActNorm) || (act.includes(eActNorm) || eActNorm.includes(act)) ||
-                                 (act === eActFull) || (act.includes(eActFull) || eActFull.includes(act));
+                // Match by project (exact or partial)
+                const projMatch = (proj === eProj) || proj.includes(eProj) || eProj.includes(proj);
+                
+                // Match by activity - try exact match first
+                const actMatch = (act === eActFull) || (act === eActNorm);
+                
+                if (debug && idx < 5) {
+                    console.log('  Estab row', idx, ':', eProj, '|', eActFull, '| Match:', projMatch && actMatch);
+                }
                 
                 if (projMatch && actMatch) {
                     total += row.Total || 0;
                     found = true;
+                    if (debug) console.log('  -> MATCHED! Total so far:', total);
                 }
             });
             
+            if (debug) console.log('Final result for', activity, ':', found ? total : '-');
             return found ? total : '-';
         }
 
