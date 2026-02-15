@@ -943,9 +943,15 @@
             select.addEventListener('change', renderDistrictData);
         }
 
+        let currentDistrict = '';
+        let currentDistrictSection = 'applications'; // 'applications' or 'establishment'
+        let districtAppData = [];
+        let districtEstabData = [];
+
         function renderDistrictData() {
             const container = document.getElementById('districtDataContainer');
             const district = document.getElementById('districtSelector')?.value || '';
+            currentDistrict = district;
             
             if (!district) {
                 container.innerHTML = '<p style="text-align:center;padding:40px;color:#666;">Please select a district to view data</p>';
@@ -955,70 +961,244 @@
             const isKashmir = KASHMIR_DISTRICTS.includes(district);
             const division = isKashmir ? 'Kashmir' : 'Jammu';
             
+            // Load district data
+            loadDistrictData(district);
+            
+            // Build the view with stat boxes and section toggles
             let html = `<h3 style="margin-bottom:20px;color:#333;">${district} (${division} Division)</h3>`;
             
-            // Section 1: Application Processing Data
-            html += '<div style="margin-bottom:30px;">';
-            html += '<h4 style="margin-bottom:15px;color:#1565c0;">📋 Application Processing</h4>';
-            html += renderDistrictApplicationsTable(district);
+            // Top 4 stat boxes
+            html += renderDistrictStatsBoxes(district);
+            
+            // Section toggle buttons
+            html += '<div class="tabs" style="margin:20px 0;">';
+            html += `<div class="tab ${currentDistrictSection === 'applications' ? 'active' : ''}" onclick="showDistrictSection('applications')">📋 ${district} - Application Processing</div>`;
+            html += `<div class="tab ${currentDistrictSection === 'establishment' ? 'active' : ''}" onclick="showDistrictSection('establishment')">✅ ${district} - Establishments</div>`;
             html += '</div>';
             
-            // Section 2: Establishment Data
-            html += '<div>';
-            html += '<h4 style="margin-bottom:15px;color:#00695c;">✅ Establishment Data</h4>';
-            html += renderDistrictEstablishmentTable(district);
-            html += '</div>';
+            // Active section content
+            if (currentDistrictSection === 'applications') {
+                html += renderDistrictApplicationsSection(district);
+            } else {
+                html += renderDistrictEstablishmentSection(district);
+            }
             
             container.innerHTML = html;
+            
+            // Setup event listeners for the new controls
+            setupDistrictEventListeners();
         }
 
-        function renderDistrictApplicationsTable(district) {
-            if (!rawSheetData || rawSheetData.length < 5) return '<p>No application data available</p>';
+        function loadDistrictData(district) {
+            districtAppData = [];
+            districtEstabData = [];
             
-            // Find the column index for this district
-            const districtRow = rawSheetData[2];  // Row 3 - district names
-            const dataRows = rawSheetData.slice(4); // Row 5+ - actual data
-            
-            let districtCol = -1;
-            districtRow.forEach((val, idx) => {
-                if (val && val.trim().toUpperCase() === district.toUpperCase()) {
-                    districtCol = idx;
+            // Load Application Processing data
+            if (rawSheetData && rawSheetData.length >= 5) {
+                const districtRow = rawSheetData[2];
+                const dataRows = rawSheetData.slice(4);
+                
+                let districtCol = -1;
+                districtRow.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        districtCol = idx;
+                    }
+                });
+                
+                if (districtCol !== -1) {
+                    dataRows.forEach(row => {
+                        if (!row[0]) return;
+                        const apps = parseInt(row[districtCol]) || 0;
+                        const appr = parseInt(row[districtCol + 1]) || 0;
+                        if (apps > 0 || appr > 0) {
+                            districtAppData.push({
+                                Project: row[0],
+                                Activity: row[1] || '',
+                                Applications: apps,
+                                Approvals: appr
+                            });
+                        }
+                    });
                 }
-            });
+            }
             
-            if (districtCol === -1) return '<p>District data not found</p>';
+            // Load Establishment data
+            if (estabRawData && estabRawData.length >= 2) {
+                const headers = estabRawData[0];
+                const dataRows = estabRawData.slice(1);
+                
+                let districtCol = -1;
+                headers.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        districtCol = idx;
+                    }
+                });
+                
+                if (districtCol !== -1) {
+                    dataRows.forEach(row => {
+                        if (!row[0] || !row[1]) return;
+                        const estab = parseInt(row[districtCol]) || 0;
+                        if (estab > 0) {
+                            districtEstabData.push({
+                                Project: row[0],
+                                Activity: row[1],
+                                Estab: estab
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
+        function renderDistrictStatsBoxes(district) {
+            const totalApps = districtAppData.reduce((sum, r) => sum + r.Applications, 0);
+            const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
+            const totalEstab = districtEstabData.reduce((sum, r) => sum + r.Estab, 0);
+            const approvalRate = totalApps > 0 ? ((totalAppr / totalApps) * 100).toFixed(1) + '%' : '0%';
+            const estabRate = totalAppr > 0 ? ((totalEstab / totalAppr) * 100).toFixed(1) + '%' : '0%';
+            
+            return `
+                <div class="stats-grid" style="margin-bottom:20px;">
+                    <div class="stat-card kashmir">
+                        <h3>📋 Applications</h3>
+                        <div class="value">${totalApps.toLocaleString()}</div>
+                        <p>Total Applications</p>
+                    </div>
+                    <div class="stat-card jammu">
+                        <h3>✓ Approvals</h3>
+                        <div class="value">${totalAppr.toLocaleString()}</div>
+                        <p>Total Approvals</p>
+                        <div style="margin-top:8px;font-size:0.9em">(${approvalRate})</div>
+                    </div>
+                    <div class="stat-card total">
+                        <h3>✅ Established</h3>
+                        <div class="value">${totalEstab.toLocaleString()}</div>
+                        <p>Units Established</p>
+                        <div style="margin-top:8px;font-size:0.9em">(${estabRate} of Appr)</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showDistrictSection(section) {
+            currentDistrictSection = section;
+            renderDistrictData();
+        }
+
+        function renderDistrictApplicationsSection(district) {
+            const projects = [...new Set(districtAppData.map(r => r.Project))].filter(p => p).sort();
+            
+            let html = '<div class="table-section">';
+            
+            // Section stat boxes
+            const totalApps = districtAppData.reduce((sum, r) => sum + r.Applications, 0);
+            const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
+            const approvalRate = totalApps > 0 ? ((totalAppr / totalApps) * 100).toFixed(1) + '%' : '0%';
+            
+            html += '<div class="stats-grid" style="margin-bottom:20px;">';
+            html += `<div class="stat-card kashmir"><h3>📋 Applications</h3><div class="value">${totalApps.toLocaleString()}</div><p>Total</p></div>`;
+            html += `<div class="stat-card jammu"><h3>✓ Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>Total</p></div>`;
+            html += `<div class="stat-card total"><h3>📊 Approval Rate</h3><div class="value">${approvalRate}</div><p>of Applications</p></div>`;
+            html += '</div>';
+            
+            // Controls
+            html += '<div class="controls">';
+            html += '<input type="text" id="distAppSearch" placeholder="🔍 Search project or activity...">';
+            html += '<select id="distAppProject"><option value="">📁 All Projects</option>';
+            projects.forEach(p => html += `<option value="${p}">${p}</option>`);
+            html += '</select></div>';
+            
+            // Table
+            html += '<div id="distAppTableContainer"></div>';
+            html += '</div>';
+            
+            return html;
+        }
+
+        function renderDistrictEstablishmentSection(district) {
+            const projects = [...new Set(districtEstabData.map(r => r.Project))].filter(p => p).sort();
+            
+            let html = '<div class="table-section">';
+            
+            // Section stat boxes
+            const totalEstab = districtEstabData.reduce((sum, r) => sum + r.Estab, 0);
+            const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
+            const estabRate = totalAppr > 0 ? ((totalEstab / totalAppr) * 100).toFixed(1) + '%' : '0%';
+            
+            html += '<div class="stats-grid" style="margin-bottom:20px;">';
+            html += `<div class="stat-card total" style="border-left:5px solid #00695c"><h3>✅ Established</h3><div class="value">${totalEstab.toLocaleString()}</div><p>Total Units</p></div>`;
+            html += `<div class="stat-card kashmir"><h3>✓ Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>Reference</p></div>`;
+            html += `<div class="stat-card jammu"><h3>📊 Estab Rate</h3><div class="value">${estabRate}</div><p>of Approvals</p></div>`;
+            html += '</div>';
+            
+            // Controls
+            html += '<div class="controls">';
+            html += '<input type="text" id="distEstabSearch" placeholder="🔍 Search project or activity...">';
+            html += '<select id="distEstabProject"><option value="">📁 All Projects</option>';
+            projects.forEach(p => html += `<option value="${p}">${p}</option>`);
+            html += '</select></div>';
+            
+            // Table
+            html += '<div id="distEstabTableContainer"></div>';
+            html += '</div>';
+            
+            return html;
+        }
+
+        function setupDistrictEventListeners() {
+            const appSearch = document.getElementById('distAppSearch');
+            const appProject = document.getElementById('distAppProject');
+            const estabSearch = document.getElementById('distEstabSearch');
+            const estabProject = document.getElementById('distEstabProject');
+            
+            if (appSearch) appSearch.addEventListener('input', renderDistrictAppTable);
+            if (appProject) appProject.addEventListener('change', renderDistrictAppTable);
+            if (estabSearch) estabSearch.addEventListener('input', renderDistrictEstabTable);
+            if (estabProject) estabProject.addEventListener('change', renderDistrictEstabTable);
+            
+            // Initial render
+            if (currentDistrictSection === 'applications') {
+                renderDistrictAppTable();
+            } else {
+                renderDistrictEstabTable();
+            }
+        }
+
+        function renderDistrictAppTable() {
+            const container = document.getElementById('distAppTableContainer');
+            if (!container) return;
+            
+            const search = document.getElementById('distAppSearch')?.value?.toLowerCase() || '';
+            const project = document.getElementById('distAppProject')?.value || '';
+            
+            let filtered = districtAppData;
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
             
             // Calculate totals
             let totalApps = 0, totalAppr = 0;
+            filtered.forEach(r => {
+                totalApps += r.Applications;
+                totalAppr += r.Approvals;
+            });
             
             let html = '<table><thead><tr>';
             html += '<th style="width:30%;">Project</th>';
-            html += '<th style="width:40%;">Activity</th>';
+            html += '<th style="width:50%;">Activity</th>';
             html += '<th class="number" style="background:#1565c0;color:white;">Applications</th>';
             html += '<th class="number" style="background:#0d47a1;color:white;">Approvals</th>';
             html += '</tr></thead><tbody>';
             
-            dataRows.forEach(row => {
-                if (!row[0]) return;
-                const project = row[0];
-                const activity = row[1] || '';
-                const apps = parseInt(row[districtCol]) || 0;
-                const appr = parseInt(row[districtCol + 1]) || 0;
-                
-                if (apps === 0 && appr === 0) return; // Skip empty rows
-                
-                totalApps += apps;
-                totalAppr += appr;
-                
+            filtered.forEach(row => {
                 html += `<tr>
-                    <td class="project-cell">${project}</td>
-                    <td class="activity-cell">${activity}</td>
-                    <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${apps.toLocaleString()}</td>
-                    <td class="number" style="color:#0d47a1;background:#e3f2fd;font-weight:600">${appr.toLocaleString()}</td>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${row.Applications.toLocaleString()}</td>
+                    <td class="number" style="color:#0d47a1;background:#e3f2fd;font-weight:600">${row.Approvals.toLocaleString()}</td>
                 </tr>`;
             });
             
-            // Grand total row
+            // Grand total
             html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
                 <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
                 <td class="number" style="color:#1565c0;background:#bbdefb;font-weight:700">${totalApps.toLocaleString()}</td>
@@ -1026,57 +1206,46 @@
             </tr>`;
             
             html += '</tbody></table>';
-            return html;
+            container.innerHTML = html;
         }
 
-        function renderDistrictEstablishmentTable(district) {
-            if (!estabRawData || estabRawData.length < 2) return '<p>No establishment data available</p>';
+        function renderDistrictEstabTable() {
+            const container = document.getElementById('distEstabTableContainer');
+            if (!container) return;
             
-            // Find the column index for this district
-            const headers = estabRawData[0];
-            const dataRows = estabRawData.slice(1);
+            const search = document.getElementById('distEstabSearch')?.value?.toLowerCase() || '';
+            const project = document.getElementById('distEstabProject')?.value || '';
             
-            let districtCol = -1;
-            headers.forEach((val, idx) => {
-                if (val && val.trim().toUpperCase() === district.toUpperCase()) {
-                    districtCol = idx;
-                }
-            });
+            let filtered = districtEstabData;
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
             
-            if (districtCol === -1) return '<p>District data not found in establishment sheet</p>';
-            
+            // Calculate totals
             let totalEstab = 0;
+            filtered.forEach(r => totalEstab += r.Estab);
             
             let html = '<table><thead><tr>';
             html += '<th style="width:30%;">Project</th>';
-            html += '<th style="width:50%;">Activity</th>';
+            html += '<th style="width:60%;">Activity</th>';
             html += '<th class="number" style="background:#00695c;color:white;">Units Established</th>';
             html += '</tr></thead><tbody>';
             
-            dataRows.forEach(row => {
-                if (!row[0] || !row[1]) return;
-                const project = row[0];
-                const activity = row[1];
-                const estab = parseInt(row[districtCol]) || 0;
-                
-                if (estab === 0) return; // Skip empty rows
-                
-                totalEstab += estab;
+            filtered.forEach(row => {
                 html += `<tr>
-                    <td class="project-cell">${project}</td>
-                    <td class="activity-cell">${activity}</td>
-                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${estab.toLocaleString()}</td>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${row.Estab.toLocaleString()}</td>
                 </tr>`;
             });
             
-            // Grand total row
+            // Grand total
             html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
                 <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
                 <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalEstab.toLocaleString()}</td>
             </tr>`;
             
             html += '</tbody></table>';
-            return html;
+            container.innerHTML = html;
         }
 
         function showTab(tabName) {
