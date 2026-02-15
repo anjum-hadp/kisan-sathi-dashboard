@@ -410,15 +410,72 @@
             </div>
 
             <div id="overview" class="tab-content active">
+                <!-- Row 1: Division & Top Projects by Applications -->
                 <div class="chart-section">
                     <div class="chart-card">
-                        <h3>Division-wise Distribution</h3>
+                        <h3>1. Division-wise Distribution</h3>
                         <div class="chart-container"><canvas id="divisionChart"></canvas></div>
                     </div>
                     <div class="chart-card">
-                        <h3>Top 10 Projects by Appl</h3>
-                        <div class="chart-container"><canvas id="projectChart"></canvas></div>
+                        <h3>2. Top 10 Projects by Applications</h3>
+                        <div class="chart-container"><canvas id="topProjectsAppChart"></canvas></div>
                     </div>
+                </div>
+                
+                <!-- Row 2: Top Projects by Approvals & Establishments -->
+                <div class="chart-section">
+                    <div class="chart-card">
+                        <h3>3. Top 10 Projects by Approvals</h3>
+                        <div class="chart-container"><canvas id="topProjectsApprChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>4. Top 10 Projects by Establishments</h3>
+                        <div class="chart-container"><canvas id="topProjectsEstabChart"></canvas></div>
+                    </div>
+                </div>
+                
+                <!-- Row 3: Top Districts by Applications, Approvals, Establishments -->
+                <div class="chart-section">
+                    <div class="chart-card">
+                        <h3>5. Top 10 Districts by Applications</h3>
+                        <div class="chart-container"><canvas id="topDistrictsAppChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>6. Top 10 Districts by Approvals</h3>
+                        <div class="chart-container"><canvas id="topDistrictsApprChart"></canvas></div>
+                    </div>
+                </div>
+                
+                <div class="chart-section">
+                    <div class="chart-card">
+                        <h3>7. Top 10 Districts by Establishments</h3>
+                        <div class="chart-container"><canvas id="topDistrictsEstabChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>12. Top 10 Districts Overall (Weighted Score)</h3>
+                        <div class="chart-container"><canvas id="topDistrictsOverallChart"></canvas></div>
+                    </div>
+                </div>
+                
+                <!-- Row 4: Low Performance Tables -->
+                <div class="table-section">
+                    <h3>8. Projects with Least Approvals vs Applications (Lowest Approval Rates)</h3>
+                    <div id="lowApprovalProjectsTable"></div>
+                </div>
+                
+                <div class="table-section">
+                    <h3>9. Projects with Least Establishments vs Approvals (Lowest Establishment Rates)</h3>
+                    <div id="lowEstabProjectsTable"></div>
+                </div>
+                
+                <div class="table-section">
+                    <h3>10. Districts with Least Approvals vs Applications (Lowest Approval Rates)</h3>
+                    <div id="lowApprovalDistrictsTable"></div>
+                </div>
+                
+                <div class="table-section">
+                    <h3>11. Districts with Least Establishments vs Approvals (Lowest Establishment Rates)</h3>
+                    <div id="lowEstabDistrictsTable"></div>
                 </div>
             </div>
 
@@ -806,9 +863,11 @@
         }
 
         function initCharts() {
-            if (charts.division) charts.division.destroy();
-            if (charts.project) charts.project.destroy();
+            // Destroy existing charts
+            Object.values(charts).forEach(chart => { if (chart) chart.destroy(); });
+            charts = {};
 
+            // 1. Division-wise Distribution (Applications)
             let kTotal = 0, jTotal = 0;
             processedData.forEach(row => {
                 kTotal += row['K-Appl'];
@@ -821,18 +880,223 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });
 
-            const projectTotals = {};
-            processedData.forEach(row => {
-                if (!projectTotals[row.Project]) projectTotals[row.Project] = 0;
-                projectTotals[row.Project] += row['Total-Appl'];
-            });
-            const sorted = Object.entries(projectTotals).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            // Calculate all metrics
+            const projectMetrics = calculateProjectMetrics();
+            const districtMetrics = calculateDistrictMetrics();
 
-            charts.project = new Chart(document.getElementById('projectChart'), {
+            // 2. Top 10 Projects by Applications
+            const topProjectsApp = [...projectMetrics].sort((a, b) => b.applications - a.applications).slice(0, 10);
+            charts.topProjectsApp = new Chart(document.getElementById('topProjectsAppChart'), {
                 type: 'bar',
-                data: { labels: sorted.map(p => p[0].substring(0, 25) + '...'), datasets: [{ label: 'Appl', data: sorted.map(p => p[1]), backgroundColor: '#667eea' }] },
+                data: { labels: topProjectsApp.map(p => p.name.substring(0, 25) + '...'), datasets: [{ label: 'Applications', data: topProjectsApp.map(p => p.applications), backgroundColor: '#667eea' }] },
                 options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
             });
+
+            // 3. Top 10 Projects by Approvals
+            const topProjectsAppr = [...projectMetrics].sort((a, b) => b.approvals - a.approvals).slice(0, 10);
+            charts.topProjectsAppr = new Chart(document.getElementById('topProjectsApprChart'), {
+                type: 'bar',
+                data: { labels: topProjectsAppr.map(p => p.name.substring(0, 25) + '...'), datasets: [{ label: 'Approvals', data: topProjectsAppr.map(p => p.approvals), backgroundColor: '#27ae60' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // 4. Top 10 Projects by Establishments
+            const topProjectsEstab = [...projectMetrics].filter(p => p.establishments > 0).sort((a, b) => b.establishments - a.establishments).slice(0, 10);
+            charts.topProjectsEstab = new Chart(document.getElementById('topProjectsEstabChart'), {
+                type: 'bar',
+                data: { labels: topProjectsEstab.map(p => p.name.substring(0, 25) + '...'), datasets: [{ label: 'Establishments', data: topProjectsEstab.map(p => p.establishments), backgroundColor: '#00695c' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // 5. Top 10 Districts by Applications
+            const topDistrictsApp = [...districtMetrics].sort((a, b) => b.applications - a.applications).slice(0, 10);
+            charts.topDistrictsApp = new Chart(document.getElementById('topDistrictsAppChart'), {
+                type: 'bar',
+                data: { labels: topDistrictsApp.map(d => d.name), datasets: [{ label: 'Applications', data: topDistrictsApp.map(d => d.applications), backgroundColor: '#3498db' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // 6. Top 10 Districts by Approvals
+            const topDistrictsAppr = [...districtMetrics].sort((a, b) => b.approvals - a.approvals).slice(0, 10);
+            charts.topDistrictsAppr = new Chart(document.getElementById('topDistrictsApprChart'), {
+                type: 'bar',
+                data: { labels: topDistrictsAppr.map(d => d.name), datasets: [{ label: 'Approvals', data: topDistrictsAppr.map(d => d.approvals), backgroundColor: '#e74c3c' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // 7. Top 10 Districts by Establishments
+            const topDistrictsEstab = [...districtMetrics].filter(d => d.establishments > 0).sort((a, b) => b.establishments - a.establishments).slice(0, 10);
+            charts.topDistrictsEstab = new Chart(document.getElementById('topDistrictsEstabChart'), {
+                type: 'bar',
+                data: { labels: topDistrictsEstab.map(d => d.name), datasets: [{ label: 'Establishments', data: topDistrictsEstab.map(d => d.establishments), backgroundColor: '#00695c' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // 12. Top 10 Districts Overall (Weighted Score)
+            // Score = (apps/totalApps)*0.2 + (appr/apps)*0.3 + (estab/appr)*0.5
+            const totalApps = districtMetrics.reduce((sum, d) => sum + d.applications, 0);
+            const districtsWithScore = districtMetrics.map(d => {
+                const appScore = totalApps > 0 ? (d.applications / totalApps) * 0.2 : 0;
+                const apprScore = d.applications > 0 ? (d.approvals / d.applications) * 0.3 : 0;
+                const estabScore = d.approvals > 0 ? (d.establishments / d.approvals) * 0.5 : 0;
+                return { ...d, score: appScore + apprScore + estabScore };
+            });
+            const topDistrictsOverall = districtsWithScore.sort((a, b) => b.score - a.score).slice(0, 10);
+            charts.topDistrictsOverall = new Chart(document.getElementById('topDistrictsOverallChart'), {
+                type: 'bar',
+                data: { labels: topDistrictsOverall.map(d => d.name), datasets: [{ label: 'Score', data: topDistrictsOverall.map(d => d.score.toFixed(3)), backgroundColor: '#9b59b6' }] },
+                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+            });
+
+            // Render tables for low performance metrics
+            renderLowPerformanceTables(projectMetrics, districtMetrics);
+        }
+
+        function calculateProjectMetrics() {
+            const metrics = {};
+            
+            // Process application data
+            processedData.forEach(row => {
+                if (!metrics[row.Project]) {
+                    metrics[row.Project] = { name: row.Project, applications: 0, approvals: 0, establishments: 0 };
+                }
+                metrics[row.Project].applications += row['Total-Appl'];
+                metrics[row.Project].approvals += row['Total-Appr'];
+            });
+            
+            // Process establishment data
+            estabData.forEach(row => {
+                if (!metrics[row.Project]) {
+                    metrics[row.Project] = { name: row.Project, applications: 0, approvals: 0, establishments: 0 };
+                }
+                metrics[row.Project].establishments += row['Total-Estab'];
+            });
+            
+            return Object.values(metrics).filter(p => p.applications > 0 || p.establishments > 0);
+        }
+
+        function calculateDistrictMetrics() {
+            const metrics = {};
+            const allDistricts = [...KASHMIR_DISTRICTS, ...JAMMU_DISTRICTS];
+            allDistricts.forEach(d => metrics[d] = { name: d, applications: 0, approvals: 0, establishments: 0 });
+            
+            // Process application data
+            if (rawSheetData && rawSheetData.length >= 5) {
+                const districtRow = rawSheetData[2];
+                const dataRows = rawSheetData.slice(4);
+                
+                allDistricts.forEach(district => {
+                    let colIdx = -1;
+                    districtRow.forEach((val, idx) => {
+                        if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                            colIdx = idx;
+                        }
+                    });
+                    
+                    if (colIdx !== -1) {
+                        dataRows.forEach(row => {
+                            metrics[district].applications += parseInt(row[colIdx]) || 0;
+                            metrics[district].approvals += parseInt(row[colIdx + 1]) || 0;
+                        });
+                    }
+                });
+            }
+            
+            // Process establishment data
+            if (estabRawData && estabRawData.length >= 2) {
+                const headers = estabRawData[0];
+                const dataRows = estabRawData.slice(1);
+                
+                allDistricts.forEach(district => {
+                    let colIdx = -1;
+                    headers.forEach((val, idx) => {
+                        if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                            colIdx = idx;
+                        }
+                    });
+                    
+                    if (colIdx !== -1) {
+                        dataRows.forEach(row => {
+                            metrics[district].establishments += parseInt(row[colIdx]) || 0;
+                        });
+                    }
+                });
+            }
+            
+            return Object.values(metrics).filter(d => d.applications > 0 || d.establishments > 0);
+        }
+
+        function renderLowPerformanceTables(projectMetrics, districtMetrics) {
+            // 8. Projects with least approvals vs applications (lowest approval rates)
+            const lowApprovalProjects = projectMetrics
+                .filter(p => p.applications >= 100) // Only consider projects with significant applications
+                .map(p => ({ ...p, rate: p.applications > 0 ? (p.approvals / p.applications) * 100 : 0 }))
+                .sort((a, b) => a.rate - b.rate)
+                .slice(0, 10);
+            
+            document.getElementById('lowApprovalProjectsTable').innerHTML = renderMetricsTable(lowApprovalProjects, 
+                ['Project', 'Applications', 'Approvals', 'Approval Rate'], 
+                ['name', 'applications', 'approvals', 'rate'],
+                (row, col) => col === 'rate' ? row.rate.toFixed(1) + '%' : row[col].toLocaleString()
+            );
+
+            // 9. Projects with least establishments vs approvals (lowest establishment rates)
+            const lowEstabProjects = projectMetrics
+                .filter(p => p.approvals >= 50) // Only consider projects with significant approvals
+                .map(p => ({ ...p, rate: p.approvals > 0 ? (p.establishments / p.approvals) * 100 : 0 }))
+                .sort((a, b) => a.rate - b.rate)
+                .slice(0, 10);
+            
+            document.getElementById('lowEstabProjectsTable').innerHTML = renderMetricsTable(lowEstabProjects, 
+                ['Project', 'Approvals', 'Establishments', 'Establishment Rate'], 
+                ['name', 'approvals', 'establishments', 'rate'],
+                (row, col) => col === 'rate' ? row.rate.toFixed(1) + '%' : row[col].toLocaleString()
+            );
+
+            // 10. Districts with least approvals vs applications
+            const lowApprovalDistricts = districtMetrics
+                .filter(d => d.applications >= 100)
+                .map(d => ({ ...d, rate: d.applications > 0 ? (d.approvals / d.applications) * 100 : 0 }))
+                .sort((a, b) => a.rate - b.rate)
+                .slice(0, 10);
+            
+            document.getElementById('lowApprovalDistrictsTable').innerHTML = renderMetricsTable(lowApprovalDistricts, 
+                ['District', 'Applications', 'Approvals', 'Approval Rate'], 
+                ['name', 'applications', 'approvals', 'rate'],
+                (row, col) => col === 'rate' ? row.rate.toFixed(1) + '%' : row[col].toLocaleString()
+            );
+
+            // 11. Districts with least establishments vs approvals
+            const lowEstabDistricts = districtMetrics
+                .filter(d => d.approvals >= 50)
+                .map(d => ({ ...d, rate: d.approvals > 0 ? (d.establishments / d.approvals) * 100 : 0 }))
+                .sort((a, b) => a.rate - b.rate)
+                .slice(0, 10);
+            
+            document.getElementById('lowEstabDistrictsTable').innerHTML = renderMetricsTable(lowEstabDistricts, 
+                ['District', 'Approvals', 'Establishments', 'Establishment Rate'], 
+                ['name', 'approvals', 'establishments', 'rate'],
+                (row, col) => col === 'rate' ? row.rate.toFixed(1) + '%' : row[col].toLocaleString()
+            );
+        }
+
+        function renderMetricsTable(data, headers, columns, formatFn) {
+            if (data.length === 0) return '<p style="text-align:center;padding:20px;">No data available</p>';
+            
+            let html = '<table><thead><tr>';
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += '</tr></thead><tbody>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    html += `<td class="number">${formatFn(row, col)}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            return html;
         }
 
         function populateFilters() {
