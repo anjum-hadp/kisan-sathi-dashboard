@@ -575,7 +575,9 @@
                     if (targetsResponse.ok) {
                         const targetsJson = await targetsResponse.json();
                         targetsData = parseSimpleData(targetsJson.values);
+                        projectOrder = extractProjectOrder();
                         console.log('Targets loaded:', targetsData.length, 'rows');
+                        console.log('Project order:', projectOrder);
                     } else {
                         console.log('Targets tab not accessible');
                         targetsData = [];
@@ -834,7 +836,12 @@
         }
 
         function populateFilters() {
-            const projects = [...new Set(processedData.map(r => r.Project))].filter(p => p).sort();
+            // Extract project order from targets if not already done
+            if (projectOrder.length === 0) {
+                projectOrder = extractProjectOrder();
+            }
+            
+            const projects = getSortedProjects(processedData);
             const select = document.getElementById('projectFilter');
             select.innerHTML = '<option value="">All Projects</option>';
             projects.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; select.appendChild(opt); });
@@ -848,7 +855,7 @@
             const search = document.getElementById('searchInput')?.value?.toLowerCase() || '';
             const project = document.getElementById('projectFilter')?.value || '';
 
-            let filtered = processedData;
+            let filtered = sortByProjectOrder(processedData);
             if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
             if (project) filtered = filtered.filter(r => r.Project === project);
 
@@ -906,10 +913,67 @@
             container.innerHTML = html;
         }
 
+        // Store project order from Targets sheet
+        let projectOrder = [];
+
+        function extractProjectOrder() {
+            if (!targetsData || targetsData.length === 0) return [];
+            
+            // Extract unique projects in the order they appear in Targets sheet
+            const order = [];
+            const seen = new Set();
+            
+            targetsData.forEach(row => {
+                const proj = row.Project || row.project || row.PROJECT;
+                if (proj && !seen.has(proj)) {
+                    order.push(proj);
+                    seen.add(proj);
+                }
+            });
+            
+            return order;
+        }
+
+        function sortByProjectOrder(items, projectKey = 'Project') {
+            if (projectOrder.length === 0) return items;
+            
+            const orderMap = new Map();
+            projectOrder.forEach((proj, idx) => orderMap.set(proj, idx));
+            
+            return [...items].sort((a, b) => {
+                const projA = a[projectKey];
+                const projB = b[projectKey];
+                const orderA = orderMap.has(projA) ? orderMap.get(projA) : 9999;
+                const orderB = orderMap.has(projB) ? orderMap.get(projB) : 9999;
+                
+                if (orderA !== orderB) return orderA - orderB;
+                // If same project or not in targets, sort by activity
+                const actA = a.Activity || '';
+                const actB = b.Activity || '';
+                return actA.localeCompare(actB);
+            });
+        }
+
+        function getSortedProjects(data, projectKey = 'Project') {
+            if (projectOrder.length === 0) {
+                // Fallback to alphabetical if no targets data
+                return [...new Set(data.map(r => r[projectKey]))].filter(p => p).sort();
+            }
+            
+            // Return only projects that exist in data, in Targets order
+            const dataProjects = new Set(data.map(r => r[projectKey]).filter(p => p));
+            return projectOrder.filter(p => dataProjects.has(p));
+        }
+
         function populateEstabFilters() {
             if (!estabData || estabData.length === 0) return;
             
-            const projects = [...new Set(estabData.map(r => r.Project))].filter(p => p).sort();
+            // Extract project order from targets if not already done
+            if (projectOrder.length === 0) {
+                projectOrder = extractProjectOrder();
+            }
+            
+            const projects = getSortedProjects(estabData);
             const select = document.getElementById('estabProjectFilter');
             select.innerHTML = '<option value="">📁 All Projects</option>';
             projects.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; select.appendChild(opt); });
@@ -928,7 +992,7 @@
             const search = document.getElementById('estabSearchInput')?.value?.toLowerCase() || '';
             const project = document.getElementById('estabProjectFilter')?.value || '';
 
-            let filtered = estabData;
+            let filtered = sortByProjectOrder(estabData);
             if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
             if (project) filtered = filtered.filter(r => r.Project === project);
 
@@ -1142,7 +1206,7 @@
         }
 
         function renderDistrictApplicationsSection(district) {
-            const projects = [...new Set(districtAppData.map(r => r.Project))].filter(p => p).sort();
+            const projects = getSortedProjects(districtAppData);
             
             let html = '<div class="table-section">';
             
@@ -1172,7 +1236,7 @@
         }
 
         function renderDistrictEstablishmentSection(district) {
-            const projects = [...new Set(districtEstabData.map(r => r.Project))].filter(p => p).sort();
+            const projects = getSortedProjects(districtEstabData);
             
             let html = '<div class="table-section">';
             
@@ -1227,7 +1291,7 @@
             const search = document.getElementById('distAppSearch')?.value?.toLowerCase() || '';
             const project = document.getElementById('distAppProject')?.value || '';
             
-            let filtered = districtAppData;
+            let filtered = sortByProjectOrder(districtAppData);
             if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
             if (project) filtered = filtered.filter(r => r.Project === project);
             
@@ -1272,7 +1336,7 @@
             const search = document.getElementById('distEstabSearch')?.value?.toLowerCase() || '';
             const project = document.getElementById('distEstabProject')?.value || '';
             
-            let filtered = districtEstabData;
+            let filtered = sortByProjectOrder(districtEstabData);
             if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
             if (project) filtered = filtered.filter(r => r.Project === project);
             
