@@ -337,16 +337,12 @@
                     <div style="margin-top:8px;font-size:0.9em"><span id="total-appr">0</span> Appr (<span
                             id="total-rate">0%</span>)</div>
                 </div>
-                <div class="stat-card total" style="border-left:5px solid #00695c">
-                    <h3>✅ Total Estab</h3>
-                    <div class="value" id="total-estab">0</div>
-                    <p>Units Established</p>
-                </div>
             </div>
 
             <div class="tabs">
                 <div class="tab active" onclick="showTab('overview')">📊 Overview</div>
                 <div class="tab" onclick="showTab('activities')">📋 Activity Details</div>
+                <div class="tab" onclick="showTab('establishment')">✅ Establishment Data</div>
             </div>
 
             <div id="overview" class="tab-content active">
@@ -372,6 +368,19 @@
                         </select>
                     </div>
                     <div id="activityTableContainer"></div>
+                </div>
+            </div>
+
+            <div id="establishment" class="tab-content">
+                <div class="table-section">
+                    <h2>✅ Establishment Data - Units Established</h2>
+                    <div class="controls">
+                        <input type="text" id="estabSearchInput" placeholder="🔍 Search project or activity...">
+                        <select id="estabProjectFilter">
+                            <option value="">📁 All Projects</option>
+                        </select>
+                    </div>
+                    <div id="establishmentTableContainer"></div>
                 </div>
             </div>
         </div>
@@ -562,18 +571,6 @@
                 });
             });
 
-            // Merge Estab data
-            console.log('Merging estab data. Estab entries:', estabData.length);
-            console.log('Sample estab:', estabData.slice(0, 2));
-            
-            processed.forEach((row, idx) => {
-                const estabTotal = getEstabValue(row.Project, row.Activity);
-                row['Estab'] = estabTotal;
-                if (idx < 3) {
-                    console.log('Row', idx, ':', row.Project, '|', row.Activity, '| Estab:', estabTotal);
-                }
-            });
-
             return processed;
         }
 
@@ -584,6 +581,12 @@
             const headers = values[0];
             const dataRows = values.slice(1);
             
+            // Find district column indices
+            const districtCols = {};
+            headers.forEach((h, idx) => {
+                if (h && h.trim) districtCols[h.trim().toUpperCase()] = idx;
+            });
+            
             const processed = [];
             
             dataRows.forEach(row => {
@@ -591,78 +594,35 @@
                 
                 const project = row[0].trim();
                 const activity = row[1].trim();
-                const total = parseInt(row[row.length - 1]) || 0;
                 
-                // Normalize activity name (remove bracketed sub-activities)
-                const normalizedActivity = normalizeActivityName(activity);
+                // Calculate Kashmir total
+                let kTotal = 0;
+                KASHMIR_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) {
+                        kTotal += parseInt(row[col]) || 0;
+                    }
+                });
+                
+                // Calculate Jammu total
+                let jTotal = 0;
+                JAMMU_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) {
+                        jTotal += parseInt(row[col]) || 0;
+                    }
+                });
                 
                 processed.push({
                     Project: project,
                     Activity: activity,
-                    NormalizedActivity: normalizedActivity,
-                    Total: total
+                    'K-Estab': kTotal,
+                    'J-Estab': jTotal,
+                    'Total-Estab': kTotal + jTotal
                 });
             });
             
             return processed;
-        }
-
-        function normalizeActivityName(activity) {
-            // Remove text in brackets/parentheses at the end
-            // e.g., "Project no.13 (Improved Fruit Plantation etc. : Apple)" -> "Project no.13"
-            // e.g., "Establishment of Low Cost Vermicompost Unit (Within Organic Cluster)" -> "Establishment of Low Cost Vermicompost Unit"
-            
-            // Remove content in brackets/parentheses at the end
-            let normalized = activity.replace(/\s*\([^)]*\)\s*$/, '').trim();
-            
-            // Special handling for specific patterns
-            // Remove trailing colons and spaces
-            normalized = normalized.replace(/:\s*$/, '').trim();
-            
-            return normalized;
-        }
-
-        function getEstabValue(project, activity) {
-            if (!estabData || estabData.length === 0) {
-                console.log('No estab data available');
-                return '-';
-            }
-            
-            const proj = String(project).toLowerCase().trim();
-            const act = String(activity).toLowerCase().trim();
-            
-            // Debug for specific activities
-            const debug = activity.includes('Polyhouses') || activity.includes('CSP');
-            if (debug) console.log('Looking for:', proj, '|', act);
-            
-            // Find all matching rows and sum their totals
-            let total = 0;
-            let found = false;
-            
-            estabData.forEach((row, idx) => {
-                const eProj = String(row.Project).toLowerCase().trim();
-                const eActNorm = String(row.NormalizedActivity).toLowerCase().trim();
-                const eActFull = String(row.Activity).toLowerCase().trim();
-                
-                // Match by project (exact or partial)
-                const projMatch = (proj === eProj) || proj.includes(eProj) || eProj.includes(proj);
-                
-                // Match by activity - try exact match first
-                const actMatch = (act === eActFull) || (act === eActNorm);
-                
-                if (debug && idx < 5) {
-                    console.log('  Estab row', idx, ':', eProj, '|', eActFull, '| Match:', projMatch && actMatch);
-                }
-                
-                if (projMatch && actMatch) {
-                    total += row.Total || 0;
-                    found = true;
-                    if (debug) console.log('  -> MATCHED! Total so far:', total);
-                }
-            });
-            
-            if (debug) console.log('Final result for', activity, ':', found ? total : '-');
-            return found ? total : '-';
         }
 
         function parseSimpleData(values) {
@@ -717,19 +677,18 @@
             calculateTotals();
             initCharts();
             populateFilters();
+            populateEstabFilters();
             renderActivityTable();
+            renderEstablishmentTable();
         }
 
         function calculateTotals() {
-            let kApps = 0, kAppr = 0, jApps = 0, jAppr = 0, totalEstab = 0;
+            let kApps = 0, kAppr = 0, jApps = 0, jAppr = 0;
             processedData.forEach(row => {
                 kApps += row['K-Appl'];
                 kAppr += row['K-Appr'];
                 jApps += row['J-Appl'];
                 jAppr += row['J-Appr'];
-                if (row['Estab'] !== '-') {
-                    totalEstab += row['Estab'];
-                }
             });
 
             document.getElementById('kashmir-apps').textContent = kApps.toLocaleString();
@@ -743,7 +702,6 @@
             document.getElementById('total-apps').textContent = (kApps + jApps).toLocaleString();
             document.getElementById('total-appr').textContent = (kAppr + jAppr).toLocaleString();
             document.getElementById('total-rate').textContent = (kApps + jApps) > 0 ? (((kAppr + jAppr) / (kApps + jApps)) * 100).toFixed(1) + '%' : '0%';
-            document.getElementById('total-estab').textContent = totalEstab.toLocaleString();
         }
 
         function initCharts() {
@@ -796,8 +754,8 @@
             if (project) filtered = filtered.filter(r => r.Project === project);
 
             let html = '<table><thead><tr>';
-            html += '<th style="width:18%;white-space:normal;line-height:1.3;">Project</th>';
-            html += '<th style="width:18%;white-space:normal;line-height:1.3;">Activity</th>';
+            html += '<th style="width:20%;white-space:normal;line-height:1.3;">Project</th>';
+            html += '<th style="width:20%;white-space:normal;line-height:1.3;">Activity</th>';
             html += '<th class="number" style="background:#1565c0;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Kashmir<br>Applications</th>';
             html += '<th class="number" style="background:#c62828;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Jammu<br>Applications</th>';
             html += '<th class="number" style="background:#1a237e;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Total<br>Applications</th>';
@@ -805,12 +763,10 @@
             html += '<th class="number" style="background:#b71c1c;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Jammu<br>Approvals</th>';
             html += '<th class="number" style="background:#1b5e20;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Total<br>Approvals</th>';
             html += '<th class="number" style="background:#4a148c;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">5-Year<br>Targets</th>';
-            html += '<th class="number" style="background:#00695c;color:white;width:8%;font-size:11px;line-height:1.3;padding:10px 4px;">Estab</th>';
             html += '</tr></thead><tbody>';
 
             filtered.forEach(row => {
                 const tgt = getTarget(row.Project, row.Activity);
-                const estab = row['Estab'] !== '-' ? row['Estab'].toLocaleString() : '-';
                 html += `<tr>
                     <td class="project-cell">${row.Project}</td>
                     <td class="activity-cell">${row.Activity}</td>
@@ -821,9 +777,72 @@
                     <td class="number" style="color:#b71c1c;background:#ffebee;font-weight:600">${row['J-Appr'].toLocaleString()}</td>
                     <td class="number" style="color:#1b5e20;background:#e8f5e9;font-weight:700">${row['Total-Appr'].toLocaleString()}</td>
                     <td class="number" style="color:#4a148c;background:#f3e5f5;font-weight:700">${tgt}</td>
-                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${estab}</td>
                 </tr>`;
             });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function populateEstabFilters() {
+            if (!estabData || estabData.length === 0) return;
+            
+            const projects = [...new Set(estabData.map(r => r.Project))].filter(p => p).sort();
+            const select = document.getElementById('estabProjectFilter');
+            select.innerHTML = '<option value="">📁 All Projects</option>';
+            projects.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; select.appendChild(opt); });
+
+            document.getElementById('estabSearchInput').addEventListener('input', renderEstablishmentTable);
+            document.getElementById('estabProjectFilter').addEventListener('change', renderEstablishmentTable);
+        }
+
+        function renderEstablishmentTable() {
+            const container = document.getElementById('establishmentTableContainer');
+            if (!estabData || estabData.length === 0) {
+                container.innerHTML = '<p style="text-align:center;padding:20px;">No establishment data available.</p>';
+                return;
+            }
+            
+            const search = document.getElementById('estabSearchInput')?.value?.toLowerCase() || '';
+            const project = document.getElementById('estabProjectFilter')?.value || '';
+
+            let filtered = estabData;
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
+
+            // Calculate totals for grand total row
+            let kTotal = 0, jTotal = 0, grandTotal = 0;
+            filtered.forEach(row => {
+                kTotal += row['K-Estab'];
+                jTotal += row['J-Estab'];
+                grandTotal += row['Total-Estab'];
+            });
+
+            let html = '<table><thead><tr>';
+            html += '<th style="width:30%;white-space:normal;line-height:1.3;">Project</th>';
+            html += '<th style="width:40%;white-space:normal;line-height:1.3;">Activity</th>';
+            html += '<th class="number" style="background:#1565c0;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Established Units<br>Kashmir</th>';
+            html += '<th class="number" style="background:#c62828;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Established Units<br>Jammu</th>';
+            html += '<th class="number" style="background:#00695c;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Established Units<br>Total</th>';
+            html += '</tr></thead><tbody>';
+
+            filtered.forEach(row => {
+                html += `<tr>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${row['K-Estab'].toLocaleString()}</td>
+                    <td class="number" style="color:#c62828;background:#ffebee;font-weight:600">${row['J-Estab'].toLocaleString()}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${row['Total-Estab'].toLocaleString()}</td>
+                </tr>`;
+            });
+
+            // Add grand total row
+            html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
+                <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
+                <td class="number" style="color:#1565c0;background:#bbdefb;font-weight:700">${kTotal.toLocaleString()}</td>
+                <td class="number" style="color:#c62828;background:#ffcdd2;font-weight:700">${jTotal.toLocaleString()}</td>
+                <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${grandTotal.toLocaleString()}</td>
+            </tr>`;
 
             html += '</tbody></table>';
             container.innerHTML = html;
