@@ -33,9 +33,25 @@
         let targetsData = [];
         let estabData = [];
         let estabRawData = []; // Store raw estab data for district view
+        let trackingData = [];
+        let trackingRawData = [];
         let processedData = [];
         let charts = {};
         const VIEW_STATE_KEY = 'kisanSathiDashboardViewStateV2';
+
+        function formatDataTimestamp(value) {
+            if (!value) return 'Data last updated: unavailable';
+
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return `Data last updated: ${value}`;
+            }
+
+            return `Data last updated: ${date.toLocaleString('en-IN', {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            })}`;
+        }
 
         // Auto-load on page load
         document.addEventListener('DOMContentLoaded', loadData);
@@ -48,6 +64,8 @@
                 projectFilter: document.getElementById('projectFilter')?.value || '',
                 estabSearchInput: document.getElementById('estabSearchInput')?.value || '',
                 estabProjectFilter: document.getElementById('estabProjectFilter')?.value || '',
+                trackingSearchInput: document.getElementById('trackingSearchInput')?.value || '',
+                trackingProjectFilter: document.getElementById('trackingProjectFilter')?.value || '',
                 districtSelector: document.getElementById('districtSelector')?.value || '',
                 currentDistrictSection,
                 distAppSearch: document.getElementById('distAppSearch')?.value || '',
@@ -103,6 +121,16 @@
                 if (select) select.value = state.estabProjectFilter;
             }
             renderEstablishmentTable();
+
+            if (state.trackingSearchInput !== undefined) {
+                const input = document.getElementById('trackingSearchInput');
+                if (input) input.value = state.trackingSearchInput;
+            }
+            if (state.trackingProjectFilter !== undefined) {
+                const select = document.getElementById('trackingProjectFilter');
+                if (select) select.value = state.trackingProjectFilter;
+            }
+            renderTrackingTable();
 
             currentDistrictSection = state.currentDistrictSection || 'applications';
             if (state.districtSelector) {
@@ -167,8 +195,10 @@
                     throw new Error(payload?.error || 'Apps Script backend returned an invalid response');
                 }
 
+                const sheetLastUpdated = payload.sheetLastUpdated || '';
                 rawSheetData = payload.rawData || [];
                 estabRawData = payload.estabData || [];
+                trackingRawData = payload.trackingData || [];
                 targetsData = parseSimpleData(payload.targetsData || []);
 
                 if (!rawSheetData || rawSheetData.length < 5) {
@@ -182,14 +212,16 @@
                 }
 
                 estabData = processEstabData(estabRawData);
+                trackingData = processTrackingData(trackingRawData);
                 projectOrder = extractProjectOrder();
                 console.log('Estab data loaded:', estabData.length, 'rows');
+                console.log('Tracking data loaded:', trackingData.length, 'rows');
                 console.log('Targets loaded:', targetsData.length, 'rows');
                 console.log('Project order:', projectOrder);
 
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('dashboardContent').style.display = 'block';
-                document.getElementById('lastUpdated').textContent = `Last updated: ${new Date().toLocaleString()}`;
+                document.getElementById('lastUpdated').textContent = formatDataTimestamp(sheetLastUpdated);
 
                 initDashboard();
 
@@ -310,6 +342,53 @@
             return processed;
         }
 
+        function processTrackingData(values) {
+            if (!values || values.length < 2) return [];
+
+            const headers = values[0];
+            const dataRows = values.slice(1);
+            const districtCols = {};
+
+            headers.forEach((h, idx) => {
+                if (h && h.trim) districtCols[h.trim().toUpperCase()] = idx;
+            });
+
+            const processed = [];
+
+            dataRows.forEach(row => {
+                if (!row[0] || !row[1]) return;
+
+                const project = row[0].trim();
+                const activity = row[1].trim();
+
+                let kTotal = 0;
+                KASHMIR_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) {
+                        kTotal += parseInt(row[col]) || 0;
+                    }
+                });
+
+                let jTotal = 0;
+                JAMMU_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) {
+                        jTotal += parseInt(row[col]) || 0;
+                    }
+                });
+
+                processed.push({
+                    Project: project,
+                    Activity: activity,
+                    'K-Tracked': kTotal,
+                    'J-Tracked': jTotal,
+                    'Total-Tracked': kTotal + jTotal
+                });
+            });
+
+            return processed;
+        }
+
         function parseSimpleData(values) {
             if (!values || values.length < 2) return [];
             const headers = values[0].map(h => String(h || '').trim());
@@ -363,9 +442,11 @@
             initCharts();
             populateFilters();
             populateEstabFilters();
+            populateTrackingFilters();
             populateDistrictSelector();
             renderActivityTable();
             renderEstablishmentTable();
+            renderTrackingTable();
             restoreViewState();
         }
 
@@ -404,6 +485,21 @@
             document.getElementById('estab-jammu').textContent = jEstab.toLocaleString();
             document.getElementById('estab-rate-kmr').textContent = kAppr > 0 ? ((kEstab / kAppr) * 100).toFixed(1) + '%' : '0%';
             document.getElementById('estab-rate-jmu').textContent = jAppr > 0 ? ((jEstab / jAppr) * 100).toFixed(1) + '%' : '0%';
+
+            // Calculate Tracking totals
+            let kTracked = 0, jTracked = 0;
+            if (trackingData && trackingData.length > 0) {
+                trackingData.forEach(row => {
+                    kTracked += row['K-Tracked'] || 0;
+                    jTracked += row['J-Tracked'] || 0;
+                });
+            }
+
+            document.getElementById('total-tracked').textContent = (kTracked + jTracked).toLocaleString();
+            document.getElementById('tracked-kashmir').textContent = kTracked.toLocaleString();
+            document.getElementById('tracked-jammu').textContent = jTracked.toLocaleString();
+            document.getElementById('tracked-rate-kmr').textContent = kEstab > 0 ? ((kTracked / kEstab) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('tracked-rate-jmu').textContent = jEstab > 0 ? ((jTracked / jEstab) * 100).toFixed(1) + '%' : '0%';
         }
 
         function initCharts() {
@@ -802,6 +898,33 @@
             });
         }
 
+        function populateTrackingFilters() {
+            if (!trackingData || trackingData.length === 0) return;
+
+            if (projectOrder.length === 0) {
+                projectOrder = extractProjectOrder();
+            }
+
+            const projects = getSortedProjects(trackingData);
+            const select = document.getElementById('trackingProjectFilter');
+            select.innerHTML = '<option value="">&#128193; All Projects</option>';
+            projects.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                select.appendChild(opt);
+            });
+
+            document.getElementById('trackingSearchInput').addEventListener('input', () => {
+                saveViewState();
+                renderTrackingTable();
+            });
+            document.getElementById('trackingProjectFilter').addEventListener('change', () => {
+                saveViewState();
+                renderTrackingTable();
+            });
+        }
+
         function renderEstablishmentTable() {
             const container = document.getElementById('establishmentTableContainer');
             if (!estabData || estabData.length === 0) {
@@ -848,6 +971,58 @@
                 <td class="number" style="color:#1565c0;background:#bbdefb;font-weight:700">${kTotal.toLocaleString()}</td>
                 <td class="number" style="color:#c62828;background:#ffcdd2;font-weight:700">${jTotal.toLocaleString()}</td>
                 <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${grandTotal.toLocaleString()}</td>
+            </tr>`;
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderTrackingTable() {
+            const container = document.getElementById('trackingTableContainer');
+            if (!container) return;
+
+            if (!trackingData || trackingData.length === 0) {
+                container.innerHTML = '<p style="text-align:center;padding:20px;">No tracking data available.</p>';
+                return;
+            }
+
+            const search = document.getElementById('trackingSearchInput')?.value?.toLowerCase() || '';
+            const project = document.getElementById('trackingProjectFilter')?.value || '';
+
+            let filtered = sortByProjectOrder(trackingData);
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
+
+            let kTotal = 0, jTotal = 0, grandTotal = 0;
+            filtered.forEach(row => {
+                kTotal += row['K-Tracked'];
+                jTotal += row['J-Tracked'];
+                grandTotal += row['Total-Tracked'];
+            });
+
+            let html = '<table><thead><tr>';
+            html += '<th style="width:30%;white-space:normal;line-height:1.3;">Project</th>';
+            html += '<th style="width:40%;white-space:normal;line-height:1.3;">Activity</th>';
+            html += '<th class="number" style="background:#1565c0;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Kashmir</th>';
+            html += '<th class="number" style="background:#c62828;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Jammu</th>';
+            html += '<th class="number" style="background:#6a1b9a;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Total</th>';
+            html += '</tr></thead><tbody>';
+
+            filtered.forEach(row => {
+                html += `<tr>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${row['K-Tracked'].toLocaleString()}</td>
+                    <td class="number" style="color:#c62828;background:#ffebee;font-weight:600">${row['J-Tracked'].toLocaleString()}</td>
+                    <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:700">${row['Total-Tracked'].toLocaleString()}</td>
+                </tr>`;
+            });
+
+            html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
+                <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
+                <td class="number" style="color:#1565c0;background:#bbdefb;font-weight:700">${kTotal.toLocaleString()}</td>
+                <td class="number" style="color:#c62828;background:#ffcdd2;font-weight:700">${jTotal.toLocaleString()}</td>
+                <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${grandTotal.toLocaleString()}</td>
             </tr>`;
 
             html += '</tbody></table>';
@@ -1229,9 +1404,16 @@
 
 4. Edit app.js:
    - Find APPS_SCRIPT_URL
-   - Replace it with your deployed web app URL`);
+   - Replace it with your deployed web app URL
+
+5. Re-deploy Apps Script after backend changes:
+   - Update the web app deployment so sheetLastUpdated is returned`);
         }
 
         // Auto-refresh every 30 minutes
-        setInterval(() => { if (APPS_SCRIPT_URL !== 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') loadData(); }, 1800000000);
+        setInterval(() => {
+            if (APPS_SCRIPT_URL !== 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                loadData();
+            }
+        }, 1800000);
 

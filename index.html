@@ -54,12 +54,20 @@
                     <div style="margin-top:8px;font-size:0.9em"><span id="estab-kashmir">0</span> Kmr, <span id="estab-jammu">0</span> Jmu</div>
                     <div style="font-size:0.85em;color:#666;">(<span id="estab-rate-kmr">0%</span> Kmr, <span id="estab-rate-jmu">0%</span> Jmu of Appr)</div>
                 </div>
+                <div class="stat-card total" style="border-left:5px solid #8e44ad">
+                    <h3>&#128269; Units Tracked</h3>
+                    <div class="value" id="total-tracked">0</div>
+                    <p>Tracked Units</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="tracked-kashmir">0</span> Kmr, <span id="tracked-jammu">0</span> Jmu</div>
+                    <div style="font-size:0.85em;color:#666;">(<span id="tracked-rate-kmr">0%</span> Kmr, <span id="tracked-rate-jmu">0%</span> Jmu of Estab)</div>
+                </div>
             </div>
 
             <div class="tabs">
                 <div class="tab active" onclick="showTab('overview')">&#128202; Overview</div>
                 <div class="tab" onclick="showTab('activities')">&#128203; Application Processing</div>
                 <div class="tab" onclick="showTab('establishment')">&#9989; Establishment Data</div>
+                <div class="tab" onclick="showTab('tracking')">&#128269; Tracking Data</div>
                 <div class="tab" onclick="showTab('district')">&#127968; District View</div>
             </div>
 
@@ -156,6 +164,19 @@
                         </select>
                     </div>
                     <div id="establishmentTableContainer"></div>
+                </div>
+            </div>
+
+            <div id="tracking" class="tab-content">
+                <div class="table-section">
+                    <h2>&#128269; Tracking Data - Units Tracked</h2>
+                    <div class="controls">
+                        <input type="text" id="trackingSearchInput" placeholder="&#128269; Search project or activity...">
+                        <select id="trackingProjectFilter">
+                            <option value="">&#128193; All Projects</option>
+                        </select>
+                    </div>
+                    <div id="trackingTableContainer"></div>
                 </div>
             </div>
 
