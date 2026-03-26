@@ -35,6 +35,7 @@
         let estabRawData = []; // Store raw estab data for district view
         let trackingData = [];
         let trackingRawData = [];
+        let neRawData = [];
         let processedData = [];
         let charts = {};
         const VIEW_STATE_KEY = 'kisanSathiDashboardViewStateV2';
@@ -58,6 +59,12 @@
 
         function getViewState() {
             const activeTab = document.querySelector('.tab-content.active')?.id || 'overview';
+            const districtSharedProject =
+                document.getElementById('distAppProject')?.value ||
+                document.getElementById('distEstabProject')?.value ||
+                document.getElementById('distTrackingProject')?.value ||
+                '';
+
             return {
                 activeTab,
                 searchInput: document.getElementById('searchInput')?.value || '',
@@ -68,10 +75,13 @@
                 trackingProjectFilter: document.getElementById('trackingProjectFilter')?.value || '',
                 districtSelector: document.getElementById('districtSelector')?.value || '',
                 currentDistrictSection,
+                districtSharedProject,
                 distAppSearch: document.getElementById('distAppSearch')?.value || '',
                 distAppProject: document.getElementById('distAppProject')?.value || '',
                 distEstabSearch: document.getElementById('distEstabSearch')?.value || '',
-                distEstabProject: document.getElementById('distEstabProject')?.value || ''
+                distEstabProject: document.getElementById('distEstabProject')?.value || '',
+                distTrackingSearch: document.getElementById('distTrackingSearch')?.value || '',
+                distTrackingProject: document.getElementById('distTrackingProject')?.value || ''
             };
         }
 
@@ -146,11 +156,17 @@
                 if (distEstabSearch) distEstabSearch.value = state.distEstabSearch || '';
                 const distEstabProject = document.getElementById('distEstabProject');
                 if (distEstabProject) distEstabProject.value = state.distEstabProject || '';
+                const distTrackingSearch = document.getElementById('distTrackingSearch');
+                if (distTrackingSearch) distTrackingSearch.value = state.distTrackingSearch || '';
+                const distTrackingProject = document.getElementById('distTrackingProject');
+                if (distTrackingProject) distTrackingProject.value = state.distTrackingProject || '';
 
                 if (currentDistrictSection === 'applications') {
                     renderDistrictAppTable();
-                } else {
+                } else if (currentDistrictSection === 'establishment') {
                     renderDistrictEstabTable();
+                } else {
+                    renderDistrictTrackingTable();
                 }
             }
 
@@ -199,6 +215,7 @@
                 rawSheetData = payload.rawData || [];
                 estabRawData = payload.estabData || [];
                 trackingRawData = payload.trackingData || [];
+                neRawData = payload.neData || [];
                 targetsData = parseSimpleData(payload.targetsData || []);
 
                 if (!rawSheetData || rawSheetData.length < 5) {
@@ -212,7 +229,7 @@
                 }
 
                 estabData = processEstabData(estabRawData);
-                trackingData = processTrackingData(trackingRawData);
+                trackingData = processTrackingData(trackingRawData, neRawData);
                 projectOrder = extractProjectOrder();
                 console.log('Estab data loaded:', estabData.length, 'rows');
                 console.log('Tracking data loaded:', trackingData.length, 'rows');
@@ -255,8 +272,8 @@
             dataRows.forEach(row => {
                 if (!row[0]) return;
 
-                const project = row[0];
-                const activity = row[1] || '';
+                const project = normalizeProjectName(row[0]);
+                const activity = normalizeActivityName(row[1] || '');
 
                 let kAppl = 0, kAppr = 0;
                 KASHMIR_DISTRICTS.forEach(d => {
@@ -288,7 +305,7 @@
                 });
             });
 
-            return processed;
+            return mergeRowsByProjectActivity(processed, ['K-Appl', 'J-Appl', 'K-Appr', 'J-Appr', 'Total-Appl', 'Total-Appr']);
         }
 
         function processEstabData(values) {
@@ -309,8 +326,8 @@
             dataRows.forEach(row => {
                 if (!row[0] || !row[1]) return;
                 
-                const project = row[0].trim();
-                const activity = row[1].trim();
+                const project = normalizeProjectName(row[0]);
+                const activity = normalizeActivityName(row[1]);
                 
                 // Calculate Kashmir total
                 let kTotal = 0;
@@ -339,11 +356,69 @@
                 });
             });
             
-            return processed;
+            return mergeRowsByProjectActivity(processed, ['K-Estab', 'J-Estab', 'Total-Estab']);
         }
 
-        function processTrackingData(values) {
-            if (!values || values.length < 2) return [];
+        function normalizeProjectName(project) {
+            const normalized = String(project || '')
+                .trim()
+                .replace(/^P\d+\s*:\s*/i, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!normalized) return '';
+
+            const projectAliases = new Map([
+                ['Promotion of Nutri cereals (Millets', 'Promotion of Nutri cereals (Millets)']
+            ]);
+
+            return projectAliases.get(normalized) || normalized;
+        }
+
+        function normalizeActivityName(activity) {
+            return String(activity || '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function buildProjectActivityKey(project, activity) {
+            return `${normalizeProjectName(project)}|||${normalizeActivityName(activity)}`;
+        }
+
+        function mergeRowsByProjectActivity(rows, numericColumns) {
+            const merged = new Map();
+
+            rows.forEach(row => {
+                const project = normalizeProjectName(row.Project);
+                const activity = normalizeActivityName(row.Activity);
+                const key = buildProjectActivityKey(project, activity);
+
+                if (!merged.has(key)) {
+                    const normalizedRow = {
+                        ...row,
+                        Project: project,
+                        Activity: activity
+                    };
+                    numericColumns.forEach(col => {
+                        normalizedRow[col] = Number(normalizedRow[col]) || 0;
+                    });
+                    merged.set(key, normalizedRow);
+                    return;
+                }
+
+                const existing = merged.get(key);
+                numericColumns.forEach(col => {
+                    existing[col] = (Number(existing[col]) || 0) + (Number(row[col]) || 0);
+                });
+            });
+
+            return [...merged.values()];
+        }
+
+        function buildDivisionTotalsMap(values) {
+            const map = new Map();
+            if (!values || values.length < 2) return map;
 
             const headers = values[0];
             const dataRows = values.slice(1);
@@ -353,13 +428,12 @@
                 if (h && h.trim) districtCols[h.trim().toUpperCase()] = idx;
             });
 
-            const processed = [];
-
             dataRows.forEach(row => {
                 if (!row[0] || !row[1]) return;
 
-                const project = row[0].trim();
-                const activity = row[1].trim();
+                const project = normalizeProjectName(row[0]);
+                const activity = normalizeActivityName(row[1]);
+                const key = buildProjectActivityKey(project, activity);
 
                 let kTotal = 0;
                 KASHMIR_DISTRICTS.forEach(d => {
@@ -377,16 +451,49 @@
                     }
                 });
 
-                processed.push({
-                    Project: project,
-                    Activity: activity,
-                    'K-Tracked': kTotal,
-                    'J-Tracked': jTotal,
-                    'Total-Tracked': kTotal + jTotal
-                });
+                if (!map.has(key)) {
+                    map.set(key, {
+                        Project: project,
+                        Activity: activity,
+                        kTotal: 0,
+                        jTotal: 0,
+                        total: 0
+                    });
+                }
+
+                const existing = map.get(key);
+                existing.kTotal += kTotal;
+                existing.jTotal += jTotal;
+                existing.total += kTotal + jTotal;
             });
 
-            return processed;
+            return map;
+        }
+
+        function processTrackingData(values, neValues) {
+            const trackingMap = buildDivisionTotalsMap(values);
+            const neMap = buildDivisionTotalsMap(neValues);
+            const combinedKeys = [...trackingMap.keys()];
+
+            neMap.forEach((_, key) => {
+                if (!trackingMap.has(key)) combinedKeys.push(key);
+            });
+
+            return combinedKeys.map(key => {
+                const tracked = trackingMap.get(key) || { Project: '', Activity: '', kTotal: 0, jTotal: 0, total: 0 };
+                const ne = neMap.get(key) || { kTotal: 0, jTotal: 0, total: 0 };
+
+                return {
+                    Project: tracked.Project || ne.Project,
+                    Activity: tracked.Activity || ne.Activity,
+                    'K-Tracked': tracked.kTotal,
+                    'J-Tracked': tracked.jTotal,
+                    'Total-Tracked': tracked.total,
+                    'K-NE': ne.kTotal,
+                    'J-NE': ne.jTotal,
+                    'Total-NE': ne.total
+                };
+            });
         }
 
         function parseSimpleData(values) {
@@ -399,6 +506,12 @@
                 headers.forEach((h, idx) => {
                     row[h] = values[i][idx] !== undefined ? String(values[i][idx]) : '';
                 });
+                if (row.Project !== undefined) row.Project = normalizeProjectName(row.Project);
+                if (row.project !== undefined) row.project = normalizeProjectName(row.project);
+                if (row.PROJECT !== undefined) row.PROJECT = normalizeProjectName(row.PROJECT);
+                if (row.Activity !== undefined) row.Activity = normalizeActivityName(row.Activity);
+                if (row.activity !== undefined) row.activity = normalizeActivityName(row.activity);
+                if (row.ACTIVITY !== undefined) row.ACTIVITY = normalizeActivityName(row.ACTIVITY);
                 data.push(row);
             }
             return data;
@@ -407,21 +520,21 @@
         function getTarget(project, activity) {
             if (!project || !activity || !targetsData || targetsData.length === 0) return '-';
 
-            const proj = String(project).toLowerCase().trim();
-            const act = String(activity).toLowerCase().trim();
+            const proj = normalizeProjectName(project).toLowerCase();
+            const act = normalizeActivityName(activity).toLowerCase();
 
             // Try exact match first
             let match = targetsData.find(t => {
-                const tProj = String(t.Project || '').toLowerCase().trim();
-                const tAct = String(t.Activity || '').toLowerCase().trim();
+                const tProj = normalizeProjectName(t.Project || '').toLowerCase();
+                const tAct = normalizeActivityName(t.Activity || '').toLowerCase();
                 return proj === tProj && act === tAct;
             });
 
             // Try partial match
             if (!match) {
                 match = targetsData.find(t => {
-                    const tProj = String(t.Project || '').toLowerCase().trim();
-                    const tAct = String(t.Activity || '').toLowerCase().trim();
+                    const tProj = normalizeProjectName(t.Project || '').toLowerCase();
+                    const tAct = normalizeActivityName(t.Activity || '').toLowerCase();
                     return (proj.includes(tProj) || tProj.includes(proj)) &&
                         (act.includes(tAct) || tAct.includes(act));
                 });
@@ -834,7 +947,7 @@
             const seen = new Set();
             
             targetsData.forEach(row => {
-                const proj = row.Project || row.project || row.PROJECT;
+                const proj = normalizeProjectName(row.Project || row.project || row.PROJECT);
                 if (proj && !seen.has(proj)) {
                     order.push(proj);
                     seen.add(proj);
@@ -994,18 +1107,25 @@
             if (project) filtered = filtered.filter(r => r.Project === project);
 
             let kTotal = 0, jTotal = 0, grandTotal = 0;
+            let kNeTotal = 0, jNeTotal = 0, grandNeTotal = 0;
             filtered.forEach(row => {
                 kTotal += row['K-Tracked'];
                 jTotal += row['J-Tracked'];
                 grandTotal += row['Total-Tracked'];
+                kNeTotal += row['K-NE'] || 0;
+                jNeTotal += row['J-NE'] || 0;
+                grandNeTotal += row['Total-NE'] || 0;
             });
 
             let html = '<table><thead><tr>';
             html += '<th style="width:30%;white-space:normal;line-height:1.3;">Project</th>';
-            html += '<th style="width:40%;white-space:normal;line-height:1.3;">Activity</th>';
-            html += '<th class="number" style="background:#1565c0;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Kashmir</th>';
-            html += '<th class="number" style="background:#c62828;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Jammu</th>';
-            html += '<th class="number" style="background:#6a1b9a;color:white;width:10%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Total</th>';
+            html += '<th style="width:28%;white-space:normal;line-height:1.3;">Activity</th>';
+            html += '<th class="number" style="background:#1565c0;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Kashmir</th>';
+            html += '<th class="number" style="background:#c62828;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Jammu</th>';
+            html += '<th class="number" style="background:#6a1b9a;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Tracked Units<br>Total</th>';
+            html += '<th class="number" style="background:#455a64;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Non-Existent Units<br>Kashmir</th>';
+            html += '<th class="number" style="background:#6d4c41;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Non-Existent Units<br>Jammu</th>';
+            html += '<th class="number" style="background:#37474f;color:white;width:7%;font-size:12px;line-height:1.3;padding:10px 4px;">Non-Existent Units<br>Total</th>';
             html += '</tr></thead><tbody>';
 
             filtered.forEach(row => {
@@ -1015,6 +1135,9 @@
                     <td class="number" style="color:#1565c0;background:#e3f2fd;font-weight:600">${row['K-Tracked'].toLocaleString()}</td>
                     <td class="number" style="color:#c62828;background:#ffebee;font-weight:600">${row['J-Tracked'].toLocaleString()}</td>
                     <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:700">${row['Total-Tracked'].toLocaleString()}</td>
+                    <td class="number" style="color:#455a64;background:#eceff1;font-weight:600">${(row['K-NE'] || 0).toLocaleString()}</td>
+                    <td class="number" style="color:#6d4c41;background:#efebe9;font-weight:600">${(row['J-NE'] || 0).toLocaleString()}</td>
+                    <td class="number" style="color:#37474f;background:#d7ccc8;font-weight:700">${(row['Total-NE'] || 0).toLocaleString()}</td>
                 </tr>`;
             });
 
@@ -1023,6 +1146,9 @@
                 <td class="number" style="color:#1565c0;background:#bbdefb;font-weight:700">${kTotal.toLocaleString()}</td>
                 <td class="number" style="color:#c62828;background:#ffcdd2;font-weight:700">${jTotal.toLocaleString()}</td>
                 <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${grandTotal.toLocaleString()}</td>
+                <td class="number" style="color:#455a64;background:#cfd8dc;font-weight:700">${kNeTotal.toLocaleString()}</td>
+                <td class="number" style="color:#6d4c41;background:#d7ccc8;font-weight:700">${jNeTotal.toLocaleString()}</td>
+                <td class="number" style="color:#37474f;background:#bcaaa4;font-weight:700">${grandNeTotal.toLocaleString()}</td>
             </tr>`;
 
             html += '</tbody></table>';
@@ -1062,9 +1188,29 @@
         }
 
         let currentDistrict = '';
-        let currentDistrictSection = 'applications'; // 'applications' or 'establishment'
+        let currentDistrictSection = 'applications'; // 'applications' or 'establishment' or 'tracking'
         let districtAppData = [];
         let districtEstabData = [];
+        let districtTrackingData = [];
+
+        function getDistrictSharedProject() {
+            const state = loadViewState();
+            return state.districtSharedProject || '';
+        }
+
+        function getDistrictSharedProjects() {
+            const allData = [
+                ...districtAppData,
+                ...districtEstabData,
+                ...districtTrackingData
+            ];
+            return getSortedProjects(allData);
+        }
+
+        function filterDistrictSectionByProject(data, project) {
+            if (!project) return data;
+            return data.filter(row => row.Project === project);
+        }
 
         function renderDistrictData() {
             const container = document.getElementById('districtDataContainer');
@@ -1092,13 +1238,16 @@
             html += '<div class="tabs" style="margin:20px 0;">';
             html += `<div class="tab ${currentDistrictSection === 'applications' ? 'active' : ''}" onclick="showDistrictSection('applications')">&#128203; ${district} - Application Processing</div>`;
             html += `<div class="tab ${currentDistrictSection === 'establishment' ? 'active' : ''}" onclick="showDistrictSection('establishment')">&#9989; ${district} - Establishments</div>`;
+            html += `<div class="tab ${currentDistrictSection === 'tracking' ? 'active' : ''}" onclick="showDistrictSection('tracking')">&#128269; ${district} - Tracking</div>`;
             html += '</div>';
             
             // Active section content
             if (currentDistrictSection === 'applications') {
                 html += renderDistrictApplicationsSection(district);
-            } else {
+            } else if (currentDistrictSection === 'establishment') {
                 html += renderDistrictEstablishmentSection(district);
+            } else {
+                html += renderDistrictTrackingSection(district);
             }
             
             container.innerHTML = html;
@@ -1110,6 +1259,7 @@
         function loadDistrictData(district) {
             districtAppData = [];
             districtEstabData = [];
+            districtTrackingData = [];
             
             // Load Application Processing data
             if (rawSheetData && rawSheetData.length >= 5) {
@@ -1130,8 +1280,8 @@
                         const appr = parseInt(row[districtCol + 1]) || 0;
                         if (apps > 0 || appr > 0) {
                             districtAppData.push({
-                                Project: row[0],
-                                Activity: row[1] || '',
+                                Project: normalizeProjectName(row[0]),
+                                Activity: normalizeActivityName(row[1] || ''),
                                 Applications: apps,
                                 Approvals: appr
                             });
@@ -1158,22 +1308,83 @@
                         const estab = parseInt(row[districtCol]) || 0;
                         if (estab > 0) {
                             districtEstabData.push({
-                                Project: row[0],
-                                Activity: row[1],
+                                Project: normalizeProjectName(row[0]),
+                                Activity: normalizeActivityName(row[1]),
                                 Estab: estab
                             });
                         }
                     });
                 }
             }
+
+            // Load Tracking data
+            if (trackingRawData && trackingRawData.length >= 2) {
+                const headers = trackingRawData[0];
+                const dataRows = trackingRawData.slice(1);
+                const neHeaders = neRawData && neRawData.length >= 2 ? neRawData[0] : [];
+                const neRows = neRawData && neRawData.length >= 2 ? neRawData.slice(1) : [];
+                const trackedByKey = new Map();
+                const neByKey = new Map();
+
+                let districtCol = -1;
+                headers.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        districtCol = idx;
+                    }
+                });
+
+                let neDistrictCol = -1;
+                neHeaders.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        neDistrictCol = idx;
+                    }
+                });
+
+                if (districtCol !== -1) {
+                    dataRows.forEach(row => {
+                        if (!row[0] || !row[1]) return;
+                        const key = buildProjectActivityKey(row[0], row[1]);
+                        trackedByKey.set(key, (trackedByKey.get(key) || 0) + (parseInt(row[districtCol]) || 0));
+                    });
+                }
+
+                if (neDistrictCol !== -1) {
+                    neRows.forEach(row => {
+                        if (!row[0] || !row[1]) return;
+                        const key = buildProjectActivityKey(row[0], row[1]);
+                        neByKey.set(key, (neByKey.get(key) || 0) + (parseInt(row[neDistrictCol]) || 0));
+                    });
+                }
+
+                const combinedKeys = new Set([...trackedByKey.keys(), ...neByKey.keys()]);
+                combinedKeys.forEach(key => {
+                    const [project, activity] = key.split('|||');
+                    const tracked = trackedByKey.get(key) || 0;
+                    const nonExistent = neByKey.get(key) || 0;
+                    if (tracked > 0 || nonExistent > 0) {
+                        districtTrackingData.push({
+                            Project: project,
+                            Activity: activity,
+                            Tracked: tracked,
+                            'Non-Existent': nonExistent
+                        });
+                    }
+                });
+            }
+
+            districtAppData = mergeRowsByProjectActivity(districtAppData, ['Applications', 'Approvals']);
+            districtEstabData = mergeRowsByProjectActivity(districtEstabData, ['Estab']);
+            districtTrackingData = mergeRowsByProjectActivity(districtTrackingData, ['Tracked', 'Non-Existent']);
         }
 
         function renderDistrictStatsBoxes(district) {
             const totalApps = districtAppData.reduce((sum, r) => sum + r.Applications, 0);
             const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
             const totalEstab = districtEstabData.reduce((sum, r) => sum + r.Estab, 0);
+            const totalTracked = districtTrackingData.reduce((sum, r) => sum + r.Tracked, 0);
             const approvalRate = totalApps > 0 ? ((totalAppr / totalApps) * 100).toFixed(1) + '%' : '0%';
             const estabRate = totalAppr > 0 ? ((totalEstab / totalAppr) * 100).toFixed(1) + '%' : '0%';
+            const trackedRate = totalEstab > 0 ? ((totalTracked / totalEstab) * 100).toFixed(1) + '%' : '0%';
             
             return `
                 <div class="stats-grid" style="margin-bottom:20px;">
@@ -1194,6 +1405,12 @@
                         <p>Units Established</p>
                         <div style="margin-top:8px;font-size:0.9em">(${estabRate} of Appr)</div>
                     </div>
+                    <div class="stat-card total" style="border-left:5px solid #8e44ad">
+                        <h3>&#128269; Tracked</h3>
+                        <div class="value">${totalTracked.toLocaleString()}</div>
+                        <p>Tracked Units</p>
+                        <div style="margin-top:8px;font-size:0.9em">(${trackedRate} of Estab)</div>
+                    </div>
                 </div>
             `;
         }
@@ -1205,26 +1422,29 @@
         }
 
         function renderDistrictApplicationsSection(district) {
-            const projects = getSortedProjects(districtAppData);
+            const projects = getDistrictSharedProjects();
+            const selectedProject = getDistrictSharedProject();
+            const summaryData = filterDistrictSectionByProject(districtAppData, selectedProject);
             
             let html = '<div class="table-section">';
             
             // Section stat boxes
-            const totalApps = districtAppData.reduce((sum, r) => sum + r.Applications, 0);
-            const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
+            const totalApps = summaryData.reduce((sum, r) => sum + r.Applications, 0);
+            const totalAppr = summaryData.reduce((sum, r) => sum + r.Approvals, 0);
             const approvalRate = totalApps > 0 ? ((totalAppr / totalApps) * 100).toFixed(1) + '%' : '0%';
+            const summaryLabel = selectedProject ? 'Selected Project' : 'Total';
             
             html += '<div class="stats-grid" style="margin-bottom:20px;">';
-            html += `<div class="stat-card kashmir"><h3>&#128203; Applications</h3><div class="value">${totalApps.toLocaleString()}</div><p>Total</p></div>`;
-            html += `<div class="stat-card jammu"><h3>&#10003; Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>Total</p></div>`;
-            html += `<div class="stat-card total"><h3>&#128202; Approval Rate</h3><div class="value">${approvalRate}</div><p>of Applications</p></div>`;
+            html += `<div class="stat-card kashmir"><h3>&#128203; Applications</h3><div class="value">${totalApps.toLocaleString()}</div><p>${summaryLabel}</p></div>`;
+            html += `<div class="stat-card jammu"><h3>&#10003; Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>${summaryLabel}</p></div>`;
+            html += `<div class="stat-card total"><h3>&#128202; Approval Rate</h3><div class="value">${approvalRate}</div><p>${selectedProject ? 'for Selected Project' : 'of Applications'}</p></div>`;
             html += '</div>';
             
             // Controls
             html += '<div class="controls">';
             html += '<input type="text" id="distAppSearch" placeholder="&#128269; Search project or activity...">';
             html += '<select id="distAppProject"><option value="">&#128193; All Projects</option>';
-            projects.forEach(p => html += `<option value="${p}">${p}</option>`);
+            projects.forEach(p => html += `<option value="${p}"${p === selectedProject ? ' selected' : ''}>${p}</option>`);
             html += '</select></div>';
             
             // Table
@@ -1235,32 +1455,67 @@
         }
 
         function renderDistrictEstablishmentSection(district) {
-            const projects = getSortedProjects(districtEstabData);
+            const projects = getDistrictSharedProjects();
+            const selectedProject = getDistrictSharedProject();
+            const summaryData = filterDistrictSectionByProject(districtEstabData, selectedProject);
+            const summaryAppData = filterDistrictSectionByProject(districtAppData, selectedProject);
             
             let html = '<div class="table-section">';
             
             // Section stat boxes
-            const totalEstab = districtEstabData.reduce((sum, r) => sum + r.Estab, 0);
-            const totalAppr = districtAppData.reduce((sum, r) => sum + r.Approvals, 0);
+            const totalEstab = summaryData.reduce((sum, r) => sum + r.Estab, 0);
+            const totalAppr = summaryAppData.reduce((sum, r) => sum + r.Approvals, 0);
             const estabRate = totalAppr > 0 ? ((totalEstab / totalAppr) * 100).toFixed(1) + '%' : '0%';
+            const summaryLabel = selectedProject ? 'Selected Project' : 'Total Units';
             
             html += '<div class="stats-grid" style="margin-bottom:20px;">';
-            html += `<div class="stat-card total" style="border-left:5px solid #00695c"><h3>&#9989; Established</h3><div class="value">${totalEstab.toLocaleString()}</div><p>Total Units</p></div>`;
-            html += `<div class="stat-card kashmir"><h3>&#10003; Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>Reference</p></div>`;
-            html += `<div class="stat-card jammu"><h3>&#128202; Estab Rate</h3><div class="value">${estabRate}</div><p>of Approvals</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #00695c"><h3>&#9989; Established</h3><div class="value">${totalEstab.toLocaleString()}</div><p>${summaryLabel}</p></div>`;
+            html += `<div class="stat-card kashmir"><h3>&#10003; Approvals</h3><div class="value">${totalAppr.toLocaleString()}</div><p>${selectedProject ? 'Project Reference' : 'Reference'}</p></div>`;
+            html += `<div class="stat-card jammu"><h3>&#128202; Estab Rate</h3><div class="value">${estabRate}</div><p>${selectedProject ? 'for Selected Project' : 'of Approvals'}</p></div>`;
             html += '</div>';
             
             // Controls
             html += '<div class="controls">';
             html += '<input type="text" id="distEstabSearch" placeholder="&#128269; Search project or activity...">';
             html += '<select id="distEstabProject"><option value="">&#128193; All Projects</option>';
-            projects.forEach(p => html += `<option value="${p}">${p}</option>`);
+            projects.forEach(p => html += `<option value="${p}"${p === selectedProject ? ' selected' : ''}>${p}</option>`);
             html += '</select></div>';
             
             // Table
             html += '<div id="distEstabTableContainer"></div>';
             html += '</div>';
             
+            return html;
+        }
+
+        function renderDistrictTrackingSection(district) {
+            const projects = getDistrictSharedProjects();
+            const selectedProject = getDistrictSharedProject();
+            const summaryData = filterDistrictSectionByProject(districtTrackingData, selectedProject);
+            const summaryEstabData = filterDistrictSectionByProject(districtEstabData, selectedProject);
+
+            let html = '<div class="table-section">';
+
+            const totalTracked = summaryData.reduce((sum, r) => sum + r.Tracked, 0);
+            const totalEstab = summaryEstabData.reduce((sum, r) => sum + r.Estab, 0);
+            const trackedRate = totalEstab > 0 ? ((totalTracked / totalEstab) * 100).toFixed(1) + '%' : '0%';
+            const summaryLabel = selectedProject ? 'Selected Project' : 'Total Units';
+
+            html += '<div class="stats-grid" style="margin-bottom:20px;">';
+            html += `<div class="stat-card total" style="border-left:5px solid #8e44ad"><h3>&#128269; Tracked</h3><div class="value">${totalTracked.toLocaleString()}</div><p>${summaryLabel}</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #00695c"><h3>&#9989; Established</h3><div class="value">${totalEstab.toLocaleString()}</div><p>${selectedProject ? 'Project Reference' : 'Reference'}</p></div>`;
+            html += `<div class="stat-card jammu"><h3>&#128202; Tracking Rate</h3><div class="value">${trackedRate}</div><p>${selectedProject ? 'for Selected Project' : 'of Established'}</p></div>`;
+            html += '</div>';
+
+            html += '<div class="controls">';
+            html += '<input type="text" id="distTrackingSearch" placeholder="&#128269; Search project or activity...">';
+            html += '<select id="distTrackingProject"><option value="">&#128193; All Projects</option>';
+            projects.forEach(p => html += `<option value="${p}"${p === selectedProject ? ' selected' : ''}>${p}</option>`);
+            html += '</select></div>';
+
+            html += '<div id="distTrackingTableContainer"></div>';
+            html += '</div>';
+
             return html;
         }
 
@@ -1276,7 +1531,7 @@
             });
             if (appProject) appProject.addEventListener('change', () => {
                 saveViewState();
-                renderDistrictAppTable();
+                renderDistrictData();
             });
             if (estabSearch) estabSearch.addEventListener('input', () => {
                 saveViewState();
@@ -1284,14 +1539,26 @@
             });
             if (estabProject) estabProject.addEventListener('change', () => {
                 saveViewState();
-                renderDistrictEstabTable();
+                renderDistrictData();
+            });
+            const trackingSearch = document.getElementById('distTrackingSearch');
+            const trackingProject = document.getElementById('distTrackingProject');
+            if (trackingSearch) trackingSearch.addEventListener('input', () => {
+                saveViewState();
+                renderDistrictTrackingTable();
+            });
+            if (trackingProject) trackingProject.addEventListener('change', () => {
+                saveViewState();
+                renderDistrictData();
             });
             
             // Initial render
             if (currentDistrictSection === 'applications') {
                 renderDistrictAppTable();
-            } else {
+            } else if (currentDistrictSection === 'establishment') {
                 renderDistrictEstabTable();
+            } else {
+                renderDistrictTrackingTable();
             }
         }
 
@@ -1375,6 +1642,50 @@
                 <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalEstab.toLocaleString()}</td>
             </tr>`;
             
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderDistrictTrackingTable() {
+            const container = document.getElementById('distTrackingTableContainer');
+            if (!container) return;
+
+            const search = document.getElementById('distTrackingSearch')?.value?.toLowerCase() || '';
+            const project = document.getElementById('distTrackingProject')?.value || '';
+
+            let filtered = sortByProjectOrder(districtTrackingData);
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
+
+            let totalTracked = 0;
+            let totalNonExistent = 0;
+            filtered.forEach(r => {
+                totalTracked += r.Tracked;
+                totalNonExistent += r['Non-Existent'] || 0;
+            });
+
+            let html = '<table><thead><tr>';
+            html += '<th style="width:30%;">Project</th>';
+            html += '<th style="width:45%;">Activity</th>';
+            html += '<th class="number" style="background:#6a1b9a;color:white;">Units Tracked</th>';
+            html += '<th class="number" style="background:#37474f;color:white;">Non-Existent Units</th>';
+            html += '</tr></thead><tbody>';
+
+            filtered.forEach(row => {
+                html += `<tr>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:700">${row.Tracked.toLocaleString()}</td>
+                    <td class="number" style="color:#37474f;background:#eceff1;font-weight:700">${(row['Non-Existent'] || 0).toLocaleString()}</td>
+                </tr>`;
+            });
+
+            html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
+                <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
+                <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${totalTracked.toLocaleString()}</td>
+                <td class="number" style="color:#37474f;background:#cfd8dc;font-weight:700">${totalNonExistent.toLocaleString()}</td>
+            </tr>`;
+
             html += '</tbody></table>';
             container.innerHTML = html;
         }
