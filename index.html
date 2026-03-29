@@ -65,6 +65,7 @@
 
             <div class="tabs">
                 <div class="tab active" onclick="showTab('overview')">&#128202; Overview</div>
+                <div class="tab" onclick="showTab('insights')">&#128161; Insights</div>
                 <div class="tab" onclick="showTab('activities')">&#128203; Application Processing</div>
                 <div class="tab" onclick="showTab('establishment')">&#9989; Establishment Data</div>
                 <div class="tab" onclick="showTab('tracking')">&#128269; Tracking Data</div>
@@ -138,6 +139,56 @@
                 <div class="table-section">
                     <h3>11. Districts with Least Establishments vs Approvals (Lowest Establishment Rates)</h3>
                     <div id="lowEstabDistrictsTable"></div>
+                </div>
+            </div>
+
+            <div id="insights" class="tab-content">
+                <div class="table-section">
+                    <h2>&#128161; Insights</h2>
+                    <div class="controls">
+                        <select id="insightsProjectFilter">
+                            <option value="">&#128193; All Projects</option>
+                        </select>
+                        <select id="insightsDivisionFilter">
+                            <option value="">&#127760; All Divisions</option>
+                            <option value="Kashmir">Kashmir Division</option>
+                            <option value="Jammu">Jammu Division</option>
+                        </select>
+                        <select id="insightsDistrictFilter">
+                            <option value="">&#127968; All Districts</option>
+                        </select>
+                    </div>
+                    <p style="color:#666;margin-bottom:20px;line-height:1.5;">
+                        Rankings compare activities across applications, approvals, establishments, and tracking.
+                        Click the arrow in a result column to switch between high-to-low and low-to-high sorting.
+                    </p>
+
+                    <div class="tabs" style="margin:20px 0;">
+                        <div class="tab active" id="insights-tab-scale" onclick="showInsightsSection('scale')">1. Scale</div>
+                        <div class="tab" id="insights-tab-approvals" onclick="showInsightsSection('approvals')">2. Approvals</div>
+                        <div class="tab" id="insights-tab-establishments" onclick="showInsightsSection('establishments')">3. Establishments</div>
+                        <div class="tab" id="insights-tab-tracking" onclick="showInsightsSection('tracking')">4. Tracking</div>
+                    </div>
+
+                    <div class="table-section insights-section active" id="insights-section-scale" style="margin-bottom:0;padding:20px;">
+                        <h3>1. Scale: Applications vs Targets</h3>
+                        <div id="insightsScaleTable"></div>
+                    </div>
+
+                    <div class="table-section insights-section" id="insights-section-approvals" style="margin-bottom:0;padding:20px;display:none;">
+                        <h3>2. Approvals: Approvals vs Applications</h3>
+                        <div id="insightsApprovalsTable"></div>
+                    </div>
+
+                    <div class="table-section insights-section" id="insights-section-establishments" style="margin-bottom:0;padding:20px;display:none;">
+                        <h3>3. Establishments: Established vs Targets and Approvals</h3>
+                        <div id="insightsEstablishmentsTable"></div>
+                    </div>
+
+                    <div class="table-section insights-section" id="insights-section-tracking" style="margin-bottom:0;padding:20px;display:none;">
+                        <h3>4. Tracking: Tracked vs Established</h3>
+                        <div id="insightsTrackingTable"></div>
+                    </div>
                 </div>
             </div>
 

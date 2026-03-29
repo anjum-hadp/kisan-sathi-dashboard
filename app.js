@@ -39,6 +39,13 @@
         let processedData = [];
         let charts = {};
         const VIEW_STATE_KEY = 'kisanSathiDashboardViewStateV2';
+        let currentInsightsSection = 'scale';
+        let insightsSortState = {
+            scale: { key: 'scaleRate', direction: 'desc' },
+            approvals: { key: 'approvalRate', direction: 'desc' },
+            establishments: { key: 'estabVsTargetRate', direction: 'desc' },
+            tracking: { key: 'trackingRate', direction: 'desc' }
+        };
 
         function formatDataTimestamp(value) {
             if (!value) return 'Data last updated: unavailable';
@@ -67,6 +74,11 @@
 
             return {
                 activeTab,
+                currentInsightsSection,
+                insightsProjectFilter: document.getElementById('insightsProjectFilter')?.value || '',
+                insightsDivisionFilter: document.getElementById('insightsDivisionFilter')?.value || '',
+                insightsDistrictFilter: document.getElementById('insightsDistrictFilter')?.value || '',
+                insightsSortState,
                 searchInput: document.getElementById('searchInput')?.value || '',
                 projectFilter: document.getElementById('projectFilter')?.value || '',
                 estabSearchInput: document.getElementById('estabSearchInput')?.value || '',
@@ -111,6 +123,27 @@
 
         function restoreViewState() {
             const state = loadViewState();
+
+            if (state.insightsSortState) {
+                insightsSortState = state.insightsSortState;
+            }
+            currentInsightsSection = state.currentInsightsSection || 'scale';
+
+            if (state.insightsDivisionFilter !== undefined) {
+                const select = document.getElementById('insightsDivisionFilter');
+                if (select) select.value = state.insightsDivisionFilter;
+            }
+            updateInsightsDistrictOptions(state.insightsDistrictFilter || '');
+            if (state.insightsProjectFilter !== undefined) {
+                const select = document.getElementById('insightsProjectFilter');
+                if (select) select.value = state.insightsProjectFilter;
+            }
+            if (state.insightsDistrictFilter !== undefined) {
+                const select = document.getElementById('insightsDistrictFilter');
+                if (select) select.value = state.insightsDistrictFilter;
+            }
+            renderInsights();
+            showInsightsSection(currentInsightsSection, false);
 
             if (state.searchInput !== undefined) {
                 const input = document.getElementById('searchInput');
@@ -550,13 +583,376 @@
             return '-';
         }
 
+        function parseTargetNumber(value) {
+            const cleaned = String(value || '').replace(/,/g, '').trim();
+            const match = cleaned.match(/-?\d+(\.\d+)?/);
+            return match ? parseFloat(match[0]) : 0;
+        }
+
+        function getInsightsDistrictOptions(division) {
+            if (division === 'Kashmir') return [...KASHMIR_DISTRICTS];
+            if (division === 'Jammu') return [...JAMMU_DISTRICTS];
+            return [...KASHMIR_DISTRICTS, ...JAMMU_DISTRICTS].sort((a, b) => a.localeCompare(b));
+        }
+
+        function updateInsightsDistrictOptions(preferredValue = '') {
+            const division = document.getElementById('insightsDivisionFilter')?.value || '';
+            const select = document.getElementById('insightsDistrictFilter');
+            if (!select) return;
+
+            const options = getInsightsDistrictOptions(division);
+            const currentValue = preferredValue || select.value || '';
+            select.innerHTML = '<option value="">&#127968; All Districts</option>';
+            options.forEach(district => {
+                const opt = document.createElement('option');
+                opt.value = district;
+                opt.textContent = district;
+                select.appendChild(opt);
+            });
+
+            if (options.includes(currentValue)) {
+                select.value = currentValue;
+            } else {
+                select.value = '';
+            }
+        }
+
+        function populateInsightsFilters() {
+            if (projectOrder.length === 0) {
+                projectOrder = extractProjectOrder();
+            }
+
+            const select = document.getElementById('insightsProjectFilter');
+            if (select) {
+                const allProjects = getSortedProjects([
+                    ...processedData,
+                    ...estabData,
+                    ...trackingData
+                ]);
+                select.innerHTML = '<option value="">&#128193; All Projects</option>';
+                allProjects.forEach(project => {
+                    const opt = document.createElement('option');
+                    opt.value = project;
+                    opt.textContent = project;
+                    select.appendChild(opt);
+                });
+            }
+
+            updateInsightsDistrictOptions();
+
+            const projectFilter = document.getElementById('insightsProjectFilter');
+            const divisionFilter = document.getElementById('insightsDivisionFilter');
+            const districtFilter = document.getElementById('insightsDistrictFilter');
+
+            if (projectFilter) {
+                projectFilter.onchange = () => {
+                    saveViewState();
+                    renderInsights();
+                };
+            }
+
+            if (divisionFilter) {
+                divisionFilter.onchange = () => {
+                    updateInsightsDistrictOptions();
+                    saveViewState();
+                    renderInsights();
+                };
+            }
+
+            if (districtFilter) {
+                districtFilter.onchange = () => {
+                    saveViewState();
+                    renderInsights();
+                };
+            }
+        }
+
+        function getInsightsGeoSelection() {
+            return {
+                project: document.getElementById('insightsProjectFilter')?.value || '',
+                division: document.getElementById('insightsDivisionFilter')?.value || '',
+                district: document.getElementById('insightsDistrictFilter')?.value || ''
+            };
+        }
+
+        function buildRegionalMapFromRawSheet(values, valueOffset, selection) {
+            const map = new Map();
+            if (!values || values.length < 5) return map;
+
+            const districtRow = values[2];
+            const dataRows = values.slice(4);
+            const districtCols = {};
+            districtRow.forEach((val, idx) => {
+                if (val && val.trim) districtCols[val.trim().toUpperCase()] = idx;
+            });
+
+            const districts = selection.district
+                ? [selection.district]
+                : selection.division === 'Kashmir'
+                    ? KASHMIR_DISTRICTS
+                    : selection.division === 'Jammu'
+                        ? JAMMU_DISTRICTS
+                        : [...KASHMIR_DISTRICTS, ...JAMMU_DISTRICTS];
+
+            dataRows.forEach(row => {
+                if (!row[0] || !row[1]) return;
+                const key = buildProjectActivityKey(row[0], row[1]);
+                let total = 0;
+                districts.forEach(district => {
+                    const col = districtCols[district.toUpperCase()];
+                    if (col !== undefined) {
+                        total += parseInt(row[col + valueOffset]) || 0;
+                    }
+                });
+                map.set(key, (map.get(key) || 0) + total);
+            });
+
+            return map;
+        }
+
+        function buildRegionalMapFromDistrictSheet(values, selection) {
+            const map = new Map();
+            if (!values || values.length < 2) return map;
+
+            const headers = values[0];
+            const dataRows = values.slice(1);
+            const districtCols = {};
+            headers.forEach((val, idx) => {
+                if (val && val.trim) districtCols[val.trim().toUpperCase()] = idx;
+            });
+
+            const districts = selection.district
+                ? [selection.district]
+                : selection.division === 'Kashmir'
+                    ? KASHMIR_DISTRICTS
+                    : selection.division === 'Jammu'
+                        ? JAMMU_DISTRICTS
+                        : [...KASHMIR_DISTRICTS, ...JAMMU_DISTRICTS];
+
+            dataRows.forEach(row => {
+                if (!row[0] || !row[1]) return;
+                const key = buildProjectActivityKey(row[0], row[1]);
+                let total = 0;
+                districts.forEach(district => {
+                    const col = districtCols[district.toUpperCase()];
+                    if (col !== undefined) {
+                        total += parseInt(row[col]) || 0;
+                    }
+                });
+                map.set(key, (map.get(key) || 0) + total);
+            });
+
+            return map;
+        }
+
+        function buildInsightsRows() {
+            const selection = getInsightsGeoSelection();
+            const appsMap = buildRegionalMapFromRawSheet(rawSheetData, 0, selection);
+            const approvalsMap = buildRegionalMapFromRawSheet(rawSheetData, 1, selection);
+            const establishmentsMap = buildRegionalMapFromDistrictSheet(estabRawData, selection);
+            const trackedMap = buildRegionalMapFromDistrictSheet(trackingRawData, selection);
+
+            const targetMap = new Map();
+            targetsData.forEach(row => {
+                const key = buildProjectActivityKey(row.Project || row.project, row.Activity || row.activity);
+                const targetRaw = row['5-Year Targets'] || row['5-Year Target'] || row.Target || row.target || '';
+                if (!key || !targetRaw) return;
+                targetMap.set(key, {
+                    raw: String(targetRaw),
+                    numeric: parseTargetNumber(targetRaw)
+                });
+            });
+
+            const allKeys = new Set([
+                ...appsMap.keys(),
+                ...approvalsMap.keys(),
+                ...establishmentsMap.keys(),
+                ...trackedMap.keys(),
+                ...targetMap.keys()
+            ]);
+
+            let rows = [...allKeys].map(key => {
+                const [project, activity] = key.split('|||');
+                const applications = appsMap.get(key) || 0;
+                const approvals = approvalsMap.get(key) || 0;
+                const establishments = establishmentsMap.get(key) || 0;
+                const tracked = trackedMap.get(key) || 0;
+                const target = targetMap.get(key)?.numeric || 0;
+                const targetLabel = targetMap.get(key)?.raw || '-';
+
+                return {
+                    key,
+                    Project: project,
+                    Activity: activity,
+                    applications,
+                    approvals,
+                    establishments,
+                    tracked,
+                    target,
+                    targetLabel,
+                    scaleRate: target > 0 ? (applications / target) * 100 : null,
+                    approvalRate: applications > 0 ? (approvals / applications) * 100 : null,
+                    estabVsTargetRate: target > 0 ? (establishments / target) * 100 : null,
+                    estabVsApprovalRate: approvals > 0 ? (establishments / approvals) * 100 : null,
+                    trackingRate: establishments > 0 ? (tracked / establishments) * 100 : null
+                };
+            });
+
+            if (selection.project) {
+                rows = rows.filter(row => row.Project === selection.project);
+            }
+
+            return rows.filter(row =>
+                row.target > 0 ||
+                row.applications > 0 ||
+                row.approvals > 0 ||
+                row.establishments > 0 ||
+                row.tracked > 0
+            );
+        }
+
+        function formatInsightsPercent(value) {
+            return value === null || value === undefined ? '-' : `${value.toFixed(1)}%`;
+        }
+
+        function sortInsightsRows(rows, sectionKey) {
+            const { key, direction } = insightsSortState[sectionKey];
+            return [...rows].sort((a, b) => {
+                const aVal = a[key];
+                const bVal = b[key];
+                const aMissing = aVal === null || aVal === undefined;
+                const bMissing = bVal === null || bVal === undefined;
+
+                if (aMissing && bMissing) return a.Activity.localeCompare(b.Activity);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+
+                if (aVal === bVal) {
+                    if (a.Project !== b.Project) return a.Project.localeCompare(b.Project);
+                    return a.Activity.localeCompare(b.Activity);
+                }
+
+                return direction === 'desc' ? bVal - aVal : aVal - bVal;
+            });
+        }
+
+        function getSortIndicator(sectionKey, columnKey) {
+            const state = insightsSortState[sectionKey];
+            if (state.key !== columnKey) return '&#8597;';
+            return state.direction === 'desc' ? '&#8595;' : '&#8593;';
+        }
+
+        function setInsightsSort(sectionKey, columnKey) {
+            const state = insightsSortState[sectionKey];
+            if (state.key === columnKey) {
+                state.direction = state.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                state.key = columnKey;
+                state.direction = 'desc';
+            }
+            saveViewState();
+            renderInsights();
+        }
+
+        function showInsightsSection(section, persist = true) {
+            currentInsightsSection = section;
+
+            ['scale', 'approvals', 'establishments', 'tracking'].forEach(key => {
+                const tab = document.getElementById(`insights-tab-${key}`);
+                const panel = document.getElementById(`insights-section-${key}`);
+                if (tab) tab.classList.toggle('active', key === section);
+                if (panel) {
+                    panel.classList.toggle('active', key === section);
+                    panel.style.display = key === section ? 'block' : 'none';
+                }
+            });
+
+            if (persist) saveViewState();
+        }
+
+        function renderInsightsTable(containerId, sectionKey, rows, columns) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const sortedRows = sortInsightsRows(rows, sectionKey);
+
+            if (sortedRows.length === 0) {
+                container.innerHTML = '<p style="text-align:center;padding:20px;color:#666;">No matching activities found for the selected filters.</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr>';
+            columns.forEach(column => {
+                if (column.sortKey) {
+                    html += `<th class="${column.className || ''} sortable" onclick="setInsightsSort('${sectionKey}', '${column.sortKey}')">${column.label}<span class="sort-indicator">${getSortIndicator(sectionKey, column.sortKey)}</span></th>`;
+                } else {
+                    html += `<th class="${column.className || ''}">${column.label}</th>`;
+                }
+            });
+            html += '</tr></thead><tbody>';
+
+            sortedRows.forEach(row => {
+                html += '<tr>';
+                columns.forEach(column => {
+                    const rawValue = typeof column.value === 'function' ? column.value(row) : row[column.value];
+                    html += `<td class="${column.cellClass || ''}">${rawValue}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderInsights() {
+            const rows = buildInsightsRows();
+
+            renderInsightsTable('insightsScaleTable', 'scale', rows, [
+                { label: 'Project', value: 'Project', cellClass: 'project-cell' },
+                { label: 'Activity', value: 'Activity', cellClass: 'activity-cell' },
+                { label: 'Applications', value: row => row.applications.toLocaleString(), cellClass: 'number', sortKey: 'applications' },
+                { label: 'Target', value: row => row.targetLabel, cellClass: 'number', sortKey: 'target' },
+                { label: 'Applications vs Target', value: row => formatInsightsPercent(row.scaleRate), cellClass: 'number', sortKey: 'scaleRate' }
+            ]);
+
+            renderInsightsTable('insightsApprovalsTable', 'approvals', rows, [
+                { label: 'Project', value: 'Project', cellClass: 'project-cell' },
+                { label: 'Activity', value: 'Activity', cellClass: 'activity-cell' },
+                { label: 'Applications', value: row => row.applications.toLocaleString(), cellClass: 'number', sortKey: 'applications' },
+                { label: 'Approvals', value: row => row.approvals.toLocaleString(), cellClass: 'number', sortKey: 'approvals' },
+                { label: 'Approval Rate', value: row => formatInsightsPercent(row.approvalRate), cellClass: 'number', sortKey: 'approvalRate' }
+            ]);
+
+            renderInsightsTable('insightsEstablishmentsTable', 'establishments', rows, [
+                { label: 'Project', value: 'Project', cellClass: 'project-cell' },
+                { label: 'Activity', value: 'Activity', cellClass: 'activity-cell' },
+                { label: 'Target', value: row => row.targetLabel, cellClass: 'number', sortKey: 'target' },
+                { label: 'Approvals', value: row => row.approvals.toLocaleString(), cellClass: 'number', sortKey: 'approvals' },
+                { label: 'Established', value: row => row.establishments.toLocaleString(), cellClass: 'number', sortKey: 'establishments' },
+                { label: 'Established vs Target', value: row => formatInsightsPercent(row.estabVsTargetRate), cellClass: 'number', sortKey: 'estabVsTargetRate' },
+                { label: 'Established vs Approvals', value: row => formatInsightsPercent(row.estabVsApprovalRate), cellClass: 'number', sortKey: 'estabVsApprovalRate' }
+            ]);
+
+            renderInsightsTable('insightsTrackingTable', 'tracking', rows, [
+                { label: 'Project', value: 'Project', cellClass: 'project-cell' },
+                { label: 'Activity', value: 'Activity', cellClass: 'activity-cell' },
+                { label: 'Established', value: row => row.establishments.toLocaleString(), cellClass: 'number', sortKey: 'establishments' },
+                { label: 'Tracked', value: row => row.tracked.toLocaleString(), cellClass: 'number', sortKey: 'tracked' },
+                { label: 'Tracked vs Established', value: row => formatInsightsPercent(row.trackingRate), cellClass: 'number', sortKey: 'trackingRate' }
+            ]);
+
+            showInsightsSection(currentInsightsSection, false);
+        }
+
         function initDashboard() {
             calculateTotals();
             initCharts();
+            populateInsightsFilters();
             populateFilters();
             populateEstabFilters();
             populateTrackingFilters();
             populateDistrictSelector();
+            renderInsights();
             renderActivityTable();
             renderEstablishmentTable();
             renderTrackingTable();

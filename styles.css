@@ -280,6 +280,18 @@
             font-weight: 600;
         }
 
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .sort-indicator {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 0.9em;
+            opacity: 0.95;
+        }
+
         td {
             padding: 10px 8px;
             border-bottom: 1px solid #eee;
