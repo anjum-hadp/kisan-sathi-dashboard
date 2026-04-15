@@ -56,6 +56,10 @@
             margin-bottom: 30px;
         }
 
+        .division-stats-grid {
+            margin-top: -10px;
+        }
+
         .stat-card {
             background: white;
             border-radius: 15px;

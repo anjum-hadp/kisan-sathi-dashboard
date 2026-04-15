@@ -36,6 +36,9 @@
         let trackingData = [];
         let trackingRawData = [];
         let neRawData = [];
+        let creditRawData = [];
+        let creditApplicationsRawData = [];
+        let creditData = [];
         let processedData = [];
         let charts = {};
         const VIEW_STATE_KEY = 'kisanSathiDashboardViewStateV2';
@@ -70,6 +73,7 @@
                 document.getElementById('distAppProject')?.value ||
                 document.getElementById('distEstabProject')?.value ||
                 document.getElementById('distTrackingProject')?.value ||
+                document.getElementById('distCreditProject')?.value ||
                 '';
 
             return {
@@ -85,6 +89,8 @@
                 estabProjectFilter: document.getElementById('estabProjectFilter')?.value || '',
                 trackingSearchInput: document.getElementById('trackingSearchInput')?.value || '',
                 trackingProjectFilter: document.getElementById('trackingProjectFilter')?.value || '',
+                creditSearchInput: document.getElementById('creditSearchInput')?.value || '',
+                creditProjectFilter: document.getElementById('creditProjectFilter')?.value || '',
                 districtSelector: document.getElementById('districtSelector')?.value || '',
                 currentDistrictSection,
                 districtSharedProject,
@@ -93,7 +99,9 @@
                 distEstabSearch: document.getElementById('distEstabSearch')?.value || '',
                 distEstabProject: document.getElementById('distEstabProject')?.value || '',
                 distTrackingSearch: document.getElementById('distTrackingSearch')?.value || '',
-                distTrackingProject: document.getElementById('distTrackingProject')?.value || ''
+                distTrackingProject: document.getElementById('distTrackingProject')?.value || '',
+                distCreditSearch: document.getElementById('distCreditSearch')?.value || '',
+                distCreditProject: document.getElementById('distCreditProject')?.value || ''
             };
         }
 
@@ -175,6 +183,16 @@
             }
             renderTrackingTable();
 
+            if (state.creditSearchInput !== undefined) {
+                const input = document.getElementById('creditSearchInput');
+                if (input) input.value = state.creditSearchInput;
+            }
+            if (state.creditProjectFilter !== undefined) {
+                const select = document.getElementById('creditProjectFilter');
+                if (select) select.value = state.creditProjectFilter;
+            }
+            renderCreditTable();
+
             currentDistrictSection = state.currentDistrictSection || 'applications';
             if (state.districtSelector) {
                 const districtSelect = document.getElementById('districtSelector');
@@ -193,13 +211,19 @@
                 if (distTrackingSearch) distTrackingSearch.value = state.distTrackingSearch || '';
                 const distTrackingProject = document.getElementById('distTrackingProject');
                 if (distTrackingProject) distTrackingProject.value = state.distTrackingProject || '';
+                const distCreditSearch = document.getElementById('distCreditSearch');
+                if (distCreditSearch) distCreditSearch.value = state.distCreditSearch || '';
+                const distCreditProject = document.getElementById('distCreditProject');
+                if (distCreditProject) distCreditProject.value = state.distCreditProject || '';
 
                 if (currentDistrictSection === 'applications') {
                     renderDistrictAppTable();
                 } else if (currentDistrictSection === 'establishment') {
                     renderDistrictEstabTable();
-                } else {
+                } else if (currentDistrictSection === 'tracking') {
                     renderDistrictTrackingTable();
+                } else {
+                    renderDistrictCreditTable();
                 }
             }
 
@@ -249,6 +273,8 @@
                 estabRawData = payload.estabData || [];
                 trackingRawData = payload.trackingData || [];
                 neRawData = payload.neData || [];
+                creditRawData = payload.creditData || [];
+                creditApplicationsRawData = payload.creditApplicationsData || [];
                 targetsData = parseSimpleData(payload.targetsData || []);
 
                 if (!rawSheetData || rawSheetData.length < 5) {
@@ -263,9 +289,11 @@
 
                 estabData = processEstabData(estabRawData);
                 trackingData = processTrackingData(trackingRawData, neRawData);
+                creditData = processCreditData(creditApplicationsRawData, creditRawData);
                 projectOrder = extractProjectOrder();
                 console.log('Estab data loaded:', estabData.length, 'rows');
                 console.log('Tracking data loaded:', trackingData.length, 'rows');
+                console.log('Credit data loaded:', creditData.length, 'rows');
                 console.log('Targets loaded:', targetsData.length, 'rows');
                 console.log('Project order:', projectOrder);
 
@@ -525,6 +553,98 @@
                     'K-NE': ne.kTotal,
                     'J-NE': ne.jTotal,
                     'Total-NE': ne.total
+                };
+            });
+        }
+
+        function buildCreditTotalsMap(values, config = {}) {
+            const map = new Map();
+            if (!values || values.length < 2) return map;
+
+            const projectIdx = config.projectIdx ?? 0;
+            const activityIdx = config.activityIdx ?? 1;
+            const statusIdx = config.statusIdx ?? null;
+            const statusValue = config.statusValue ?? null;
+            const headers = values[0];
+            const dataRows = values.slice(1);
+            const districtCols = {};
+
+            headers.forEach((h, idx) => {
+                if (h && h.trim) districtCols[h.trim().toUpperCase()] = idx;
+            });
+
+            dataRows.forEach(row => {
+                if (!row[projectIdx] || !row[activityIdx]) return;
+                if (statusIdx !== null && statusValue && String(row[statusIdx] || '').trim() !== statusValue) return;
+
+                const project = normalizeProjectName(row[projectIdx]);
+                const activity = normalizeActivityName(row[activityIdx]);
+                const key = buildProjectActivityKey(project, activity);
+
+                let kTotal = 0;
+                KASHMIR_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) kTotal += parseInt(row[col]) || 0;
+                });
+
+                let jTotal = 0;
+                JAMMU_DISTRICTS.forEach(d => {
+                    const col = districtCols[d.toUpperCase()];
+                    if (col !== undefined) jTotal += parseInt(row[col]) || 0;
+                });
+
+                if (!map.has(key)) {
+                    map.set(key, {
+                        Project: project,
+                        Activity: activity,
+                        kTotal: 0,
+                        jTotal: 0,
+                        total: 0
+                    });
+                }
+
+                const existing = map.get(key);
+                existing.kTotal += kTotal;
+                existing.jTotal += jTotal;
+                existing.total += kTotal + jTotal;
+            });
+
+            return map;
+        }
+
+        function processCreditData(applicationValues, statusValues) {
+            const applicationMap = buildCreditTotalsMap(applicationValues, { projectIdx: 0, activityIdx: 1 });
+            const sanctionedMap = buildCreditTotalsMap(statusValues, { projectIdx: 0, activityIdx: 1, statusIdx: 2, statusValue: 'Sanctioned' });
+            const disbursedMap = buildCreditTotalsMap(statusValues, { projectIdx: 0, activityIdx: 1, statusIdx: 2, statusValue: 'Disbursed' });
+
+            const combinedKeys = new Set([
+                ...applicationMap.keys(),
+                ...sanctionedMap.keys(),
+                ...disbursedMap.keys()
+            ]);
+
+            return [...combinedKeys].map(key => {
+                const applications = applicationMap.get(key) || { Project: '', Activity: '', kTotal: 0, jTotal: 0, total: 0 };
+                const sanctioned = sanctionedMap.get(key) || { kTotal: 0, jTotal: 0, total: 0 };
+                const disbursed = disbursedMap.get(key) || { kTotal: 0, jTotal: 0, total: 0 };
+                const inclusiveSanctioned = {
+                    kTotal: sanctioned.kTotal + disbursed.kTotal,
+                    jTotal: sanctioned.jTotal + disbursed.jTotal,
+                    total: sanctioned.total + disbursed.total
+                };
+
+                return {
+                    Project: applications.Project || sanctioned.Project || disbursed.Project,
+                    Activity: applications.Activity || sanctioned.Activity || disbursed.Activity,
+                    'K-CreditAppl': applications.kTotal,
+                    'J-CreditAppl': applications.jTotal,
+                    'Total-CreditAppl': applications.total,
+                    'K-Sanctioned': inclusiveSanctioned.kTotal,
+                    'J-Sanctioned': inclusiveSanctioned.jTotal,
+                    'Total-Sanctioned': inclusiveSanctioned.total,
+                    'K-Disbursed': disbursed.kTotal,
+                    'J-Disbursed': disbursed.jTotal,
+                    'Total-Disbursed': disbursed.total
                 };
             });
         }
@@ -951,11 +1071,13 @@
             populateFilters();
             populateEstabFilters();
             populateTrackingFilters();
+            populateCreditFilters();
             populateDistrictSelector();
             renderInsights();
             renderActivityTable();
             renderEstablishmentTable();
             renderTrackingTable();
+            renderCreditTable();
             restoreViewState();
         }
 
@@ -979,6 +1101,15 @@
             document.getElementById('total-apps').textContent = (kApps + jApps).toLocaleString();
             document.getElementById('total-appr').textContent = (kAppr + jAppr).toLocaleString();
             document.getElementById('total-rate').textContent = (kApps + jApps) > 0 ? (((kAppr + jAppr) / (kApps + jApps)) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('total-approvals-card').textContent = (kAppr + jAppr).toLocaleString();
+            document.getElementById('kashmir-appr-share').textContent = kAppr.toLocaleString();
+            document.getElementById('jammu-appr-share').textContent = jAppr.toLocaleString();
+            document.getElementById('kashmir-appr-rate-card').textContent = kApps > 0 ? ((kAppr / kApps) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('jammu-appr-rate-card').textContent = jApps > 0 ? ((jAppr / jApps) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('kashmir-approvals-widget').textContent = kAppr.toLocaleString();
+            document.getElementById('jammu-approvals-widget').textContent = jAppr.toLocaleString();
+            document.getElementById('kashmir-approval-widget-rate').textContent = kApps > 0 ? ((kAppr / kApps) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('jammu-approval-widget-rate').textContent = jApps > 0 ? ((jAppr / jApps) * 100).toFixed(1) + '%' : '0%';
 
             // Calculate Establishment totals
             let kEstab = 0, jEstab = 0;
@@ -994,6 +1125,10 @@
             document.getElementById('estab-jammu').textContent = jEstab.toLocaleString();
             document.getElementById('estab-rate-kmr').textContent = kAppr > 0 ? ((kEstab / kAppr) * 100).toFixed(1) + '%' : '0%';
             document.getElementById('estab-rate-jmu').textContent = jAppr > 0 ? ((jEstab / jAppr) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('kashmir-estab-widget').textContent = kEstab.toLocaleString();
+            document.getElementById('jammu-estab-widget').textContent = jEstab.toLocaleString();
+            document.getElementById('kashmir-estab-widget-rate').textContent = kAppr > 0 ? ((kEstab / kAppr) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('jammu-estab-widget-rate').textContent = jAppr > 0 ? ((jEstab / jAppr) * 100).toFixed(1) + '%' : '0%';
 
             // Calculate Tracking totals
             let kTracked = 0, jTracked = 0;
@@ -1434,6 +1569,33 @@
             });
         }
 
+        function populateCreditFilters() {
+            if (!creditData || creditData.length === 0) return;
+
+            if (projectOrder.length === 0) {
+                projectOrder = extractProjectOrder();
+            }
+
+            const projects = getSortedProjects(creditData);
+            const select = document.getElementById('creditProjectFilter');
+            select.innerHTML = '<option value="">&#128193; All Projects</option>';
+            projects.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                select.appendChild(opt);
+            });
+
+            document.getElementById('creditSearchInput').addEventListener('input', () => {
+                saveViewState();
+                renderCreditTable();
+            });
+            document.getElementById('creditProjectFilter').addEventListener('change', () => {
+                saveViewState();
+                renderCreditTable();
+            });
+        }
+
         function renderEstablishmentTable() {
             const container = document.getElementById('establishmentTableContainer');
             if (!estabData || estabData.length === 0) {
@@ -1551,6 +1713,128 @@
             container.innerHTML = html;
         }
 
+        function renderCreditTable() {
+            const container = document.getElementById('creditTableContainer');
+            const summary = document.getElementById('creditSummaryCards');
+            if (!container || !summary) return;
+
+            if (!creditData || creditData.length === 0) {
+                summary.innerHTML = '';
+                container.innerHTML = '<p style="text-align:center;padding:20px;">No credit data available.</p>';
+                return;
+            }
+
+            const search = document.getElementById('creditSearchInput')?.value?.toLowerCase() || '';
+            const project = document.getElementById('creditProjectFilter')?.value || '';
+
+            let filtered = sortByProjectOrder(creditData);
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
+
+            const approvalsLookup = new Map(processedData.map(row => [buildProjectActivityKey(row.Project, row.Activity), row]));
+            const establishmentsLookup = new Map(estabData.map(row => [buildProjectActivityKey(row.Project, row.Activity), row]));
+
+            let totalCreditApplications = 0;
+            let totalApprovals = 0;
+            let totalEstablishments = 0;
+            let totalSanctioned = 0;
+            let totalDisbursed = 0;
+
+            let html = '<table><thead><tr>';
+            html += '<th style="width:20%;">Project</th>';
+            html += '<th style="width:24%;">Activity</th>';
+            html += '<th class="number" style="background:#1a237e;color:white;">Approvals<br>Total</th>';
+            html += '<th class="number" style="background:#00695c;color:white;">Establishments<br>Total</th>';
+            html += '<th class="number" style="background:#004d40;color:white;">Estab / Appr<br>%</th>';
+            html += '<th class="number" style="background:#6a1b9a;color:white;">Credit Appl<br>Total</th>';
+            html += '<th class="number" style="background:#283593;color:white;">Credit / Appr<br>%</th>';
+            html += '<th class="number" style="background:#00897b;color:white;">Sanctioned<br>Total</th>';
+            html += '<th class="number" style="background:#00695c;color:white;">Sanctioned / Appr<br>%</th>';
+            html += '<th class="number" style="background:#ef6c00;color:white;">Disbursed<br>Total</th>';
+            html += '<th class="number" style="background:#e65100;color:white;">Disbursed / Appr<br>%</th>';
+            html += '</tr></thead><tbody>';
+
+            filtered.forEach(row => {
+                const approvals = approvalsLookup.get(buildProjectActivityKey(row.Project, row.Activity))?.['Total-Appr'] || 0;
+                const establishments = establishmentsLookup.get(buildProjectActivityKey(row.Project, row.Activity))?.['Total-Estab'] || 0;
+                const establishmentRate = approvals > 0 ? (establishments / approvals) * 100 : 0;
+                const creditRate = approvals > 0 ? (row['Total-CreditAppl'] / approvals) * 100 : 0;
+                const sanctionedRate = approvals > 0 ? (row['Total-Sanctioned'] / approvals) * 100 : 0;
+                const disbursedRate = approvals > 0 ? (row['Total-Disbursed'] / approvals) * 100 : 0;
+
+                totalCreditApplications += row['Total-CreditAppl'];
+                totalApprovals += approvals;
+                totalEstablishments += establishments;
+                totalSanctioned += row['Total-Sanctioned'];
+                totalDisbursed += row['Total-Disbursed'];
+
+                html += `<tr>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#1a237e;background:#e8eaf6;font-weight:700">${approvals.toLocaleString()}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${establishments.toLocaleString()}</td>
+                    <td class="number" style="color:#004d40;background:#e0f2f1;font-weight:700">${approvals > 0 ? establishmentRate.toFixed(1) + '%' : '-'}</td>
+                    <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:700">${row['Total-CreditAppl'].toLocaleString()}</td>
+                    <td class="number" style="color:#283593;background:#e8eaf6;font-weight:700">${approvals > 0 ? creditRate.toFixed(1) + '%' : '-'}</td>
+                    <td class="number" style="color:#00897b;background:#e0f2f1;font-weight:700">${row['Total-Sanctioned'].toLocaleString()}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${approvals > 0 ? sanctionedRate.toFixed(1) + '%' : '-'}</td>
+                    <td class="number" style="color:#ef6c00;background:#fff3e0;font-weight:700">${row['Total-Disbursed'].toLocaleString()}</td>
+                    <td class="number" style="color:#e65100;background:#fff3e0;font-weight:700">${approvals > 0 ? disbursedRate.toFixed(1) + '%' : '-'}</td>
+                </tr>`;
+            });
+
+            html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
+                <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
+                <td class="number" style="color:#1a237e;background:#c5cae9;font-weight:700">${totalApprovals.toLocaleString()}</td>
+                <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalEstablishments.toLocaleString()}</td>
+                <td class="number" style="color:#004d40;background:#b2dfdb;font-weight:700">${totalApprovals > 0 ? ((totalEstablishments / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+                <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${totalCreditApplications.toLocaleString()}</td>
+                <td class="number" style="color:#283593;background:#c5cae9;font-weight:700">${totalApprovals > 0 ? ((totalCreditApplications / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+                <td class="number" style="color:#00897b;background:#b2dfdb;font-weight:700">${totalSanctioned.toLocaleString()}</td>
+                <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalApprovals > 0 ? ((totalSanctioned / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+                <td class="number" style="color:#ef6c00;background:#ffe0b2;font-weight:700">${totalDisbursed.toLocaleString()}</td>
+                <td class="number" style="color:#e65100;background:#ffe0b2;font-weight:700">${totalApprovals > 0 ? ((totalDisbursed / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+            </tr>`;
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+
+            const establishmentRate = totalApprovals > 0 ? ((totalEstablishments / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const creditRate = totalApprovals > 0 ? ((totalCreditApplications / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const sanctionedRate = totalApprovals > 0 ? ((totalSanctioned / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const disbursedRate = totalApprovals > 0 ? ((totalDisbursed / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+
+            summary.innerHTML = `
+                <div class="stats-grid" style="margin-bottom:0;">
+                    <div class="stat-card total" style="border-left:5px solid #1a237e">
+                        <h3>&#10003; Total Approvals</h3>
+                        <div class="value">${totalApprovals.toLocaleString()}</div>
+                        <p>Approval Reference</p>
+                    </div>
+                    <div class="stat-card total" style="border-left:5px solid #6a1b9a">
+                        <h3>&#9989; Establishments</h3>
+                        <div class="value">${totalEstablishments.toLocaleString()}</div>
+                        <p>${establishmentRate} of Approvals</p>
+                    </div>
+                    <div class="stat-card total" style="border-left:5px solid #8e24aa">
+                        <h3>&#127974; Credit Applications</h3>
+                        <div class="value">${totalCreditApplications.toLocaleString()}</div>
+                        <p>${creditRate} of Approvals</p>
+                    </div>
+                    <div class="stat-card total" style="border-left:5px solid #00897b">
+                        <h3>&#9989; Sanctioned</h3>
+                        <div class="value">${totalSanctioned.toLocaleString()}</div>
+                        <p>${sanctionedRate} of Approvals</p>
+                    </div>
+                    <div class="stat-card total" style="border-left:5px solid #ef6c00">
+                        <h3>&#128176; Disbursed</h3>
+                        <div class="value">${totalDisbursed.toLocaleString()}</div>
+                        <p>${disbursedRate} of Approvals</p>
+                    </div>
+                </div>
+            `;
+        }
+
         function populateDistrictSelector() {
             const select = document.getElementById('districtSelector');
             select.innerHTML = '<option value="">&#127968; Select District</option>';
@@ -1584,10 +1868,11 @@
         }
 
         let currentDistrict = '';
-        let currentDistrictSection = 'applications'; // 'applications' or 'establishment' or 'tracking'
+        let currentDistrictSection = 'applications'; // 'applications' or 'establishment' or 'tracking' or 'credit'
         let districtAppData = [];
         let districtEstabData = [];
         let districtTrackingData = [];
+        let districtCreditData = [];
 
         function getDistrictSharedProject() {
             const state = loadViewState();
@@ -1598,7 +1883,8 @@
             const allData = [
                 ...districtAppData,
                 ...districtEstabData,
-                ...districtTrackingData
+                ...districtTrackingData,
+                ...districtCreditData
             ];
             return getSortedProjects(allData);
         }
@@ -1635,6 +1921,7 @@
             html += `<div class="tab ${currentDistrictSection === 'applications' ? 'active' : ''}" onclick="showDistrictSection('applications')">&#128203; ${district} - Application Processing</div>`;
             html += `<div class="tab ${currentDistrictSection === 'establishment' ? 'active' : ''}" onclick="showDistrictSection('establishment')">&#9989; ${district} - Establishments</div>`;
             html += `<div class="tab ${currentDistrictSection === 'tracking' ? 'active' : ''}" onclick="showDistrictSection('tracking')">&#128269; ${district} - Tracking</div>`;
+            html += `<div class="tab ${currentDistrictSection === 'credit' ? 'active' : ''}" onclick="showDistrictSection('credit')">&#127974; ${district} - Credit</div>`;
             html += '</div>';
             
             // Active section content
@@ -1642,8 +1929,10 @@
                 html += renderDistrictApplicationsSection(district);
             } else if (currentDistrictSection === 'establishment') {
                 html += renderDistrictEstablishmentSection(district);
-            } else {
+            } else if (currentDistrictSection === 'tracking') {
                 html += renderDistrictTrackingSection(district);
+            } else {
+                html += renderDistrictCreditSection(district);
             }
             
             container.innerHTML = html;
@@ -1656,6 +1945,7 @@
             districtAppData = [];
             districtEstabData = [];
             districtTrackingData = [];
+            districtCreditData = [];
             
             // Load Application Processing data
             if (rawSheetData && rawSheetData.length >= 5) {
@@ -1768,9 +2058,64 @@
                 });
             }
 
+            if (creditApplicationsRawData && creditApplicationsRawData.length >= 2) {
+                const applicationHeaders = creditApplicationsRawData[0];
+                const applicationRows = creditApplicationsRawData.slice(1);
+                const creditHeaders = creditRawData && creditRawData.length >= 2 ? creditRawData[0] : [];
+                const creditRows = creditRawData && creditRawData.length >= 2 ? creditRawData.slice(1) : [];
+                let applicationDistrictCol = -1;
+                let creditDistrictCol = -1;
+                const sanctionedMap = new Map();
+                const disbursedMap = new Map();
+
+                applicationHeaders.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        applicationDistrictCol = idx;
+                    }
+                });
+
+                creditHeaders.forEach((val, idx) => {
+                    if (val && val.trim().toUpperCase() === district.toUpperCase()) {
+                        creditDistrictCol = idx;
+                    }
+                });
+
+                if (creditDistrictCol !== -1) {
+                    creditRows.forEach(row => {
+                        if (!row[0] || !row[1] || !row[2]) return;
+                        const key = buildProjectActivityKey(row[0], row[1]);
+                        const value = parseInt(row[creditDistrictCol]) || 0;
+                        const status = String(row[2] || '').trim();
+                        if (status === 'Sanctioned') sanctionedMap.set(key, (sanctionedMap.get(key) || 0) + value);
+                        if (status === 'Disbursed') disbursedMap.set(key, (disbursedMap.get(key) || 0) + value);
+                    });
+                }
+
+                if (applicationDistrictCol !== -1) {
+                    applicationRows.forEach(row => {
+                        if (!row[0] || !row[1]) return;
+                        const applications = parseInt(row[applicationDistrictCol]) || 0;
+                        const key = buildProjectActivityKey(row[0], row[1]);
+                        const sanctioned = sanctionedMap.get(key) || 0;
+                        const disbursed = disbursedMap.get(key) || 0;
+                        const inclusiveSanctioned = sanctioned + disbursed;
+                        if (applications > 0 || inclusiveSanctioned > 0 || disbursed > 0) {
+                            districtCreditData.push({
+                                Project: normalizeProjectName(row[0]),
+                                Activity: normalizeActivityName(row[1]),
+                                'Credit Applications': applications,
+                                Sanctioned: inclusiveSanctioned,
+                                Disbursed: disbursed
+                            });
+                        }
+                    });
+                }
+            }
+
             districtAppData = mergeRowsByProjectActivity(districtAppData, ['Applications', 'Approvals']);
             districtEstabData = mergeRowsByProjectActivity(districtEstabData, ['Estab']);
             districtTrackingData = mergeRowsByProjectActivity(districtTrackingData, ['Tracked', 'Non-Existent']);
+            districtCreditData = mergeRowsByProjectActivity(districtCreditData, ['Credit Applications', 'Sanctioned', 'Disbursed']);
         }
 
         function renderDistrictStatsBoxes(district) {
@@ -1915,6 +2260,46 @@
             return html;
         }
 
+        function renderDistrictCreditSection(district) {
+            const projects = getDistrictSharedProjects();
+            const selectedProject = getDistrictSharedProject();
+            const summaryData = filterDistrictSectionByProject(districtCreditData, selectedProject);
+            const summaryAppData = filterDistrictSectionByProject(districtAppData, selectedProject);
+            const summaryEstabData = filterDistrictSectionByProject(districtEstabData, selectedProject);
+
+            let html = '<div class="table-section">';
+
+            const totalCreditApplications = summaryData.reduce((sum, r) => sum + (r['Credit Applications'] || 0), 0);
+            const totalEstablishments = summaryEstabData.reduce((sum, r) => sum + (r.Estab || 0), 0);
+            const totalSanctioned = summaryData.reduce((sum, r) => sum + (r.Sanctioned || 0), 0);
+            const totalDisbursed = summaryData.reduce((sum, r) => sum + (r.Disbursed || 0), 0);
+            const totalApprovals = summaryAppData.reduce((sum, r) => sum + (r.Approvals || 0), 0);
+            const establishmentRate = totalApprovals > 0 ? ((totalEstablishments / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const creditRate = totalApprovals > 0 ? ((totalCreditApplications / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const sanctionedRate = totalApprovals > 0 ? ((totalSanctioned / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const disbursedRate = totalApprovals > 0 ? ((totalDisbursed / totalApprovals) * 100).toFixed(1) + '%' : '0%';
+            const summaryLabel = selectedProject ? 'Selected Project' : 'Total Units';
+
+            html += '<div class="stats-grid" style="margin-bottom:20px;">';
+            html += `<div class="stat-card total" style="border-left:5px solid #1a237e"><h3>&#10003; Approvals</h3><div class="value">${totalApprovals.toLocaleString()}</div><p>${summaryLabel}</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #00695c"><h3>&#9989; Establishments</h3><div class="value">${totalEstablishments.toLocaleString()}</div><p>${establishmentRate} of Approvals</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #6a1b9a"><h3>&#127974; Credit Applications</h3><div class="value">${totalCreditApplications.toLocaleString()}</div><p>${creditRate} of Approvals</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #00897b"><h3>&#9989; Sanctioned</h3><div class="value">${totalSanctioned.toLocaleString()}</div><p>${sanctionedRate} of Approvals</p></div>`;
+            html += `<div class="stat-card total" style="border-left:5px solid #ef6c00"><h3>&#128176; Disbursed</h3><div class="value">${totalDisbursed.toLocaleString()}</div><p>${disbursedRate} of Approvals</p></div>`;
+            html += '</div>';
+
+            html += '<div class="controls">';
+            html += '<input type="text" id="distCreditSearch" placeholder="&#128269; Search project or activity...">';
+            html += '<select id="distCreditProject"><option value="">&#128193; All Projects</option>';
+            projects.forEach(p => html += `<option value="${p}"${p === selectedProject ? ' selected' : ''}>${p}</option>`);
+            html += '</select></div>';
+
+            html += '<div id="distCreditTableContainer"></div>';
+            html += '</div>';
+
+            return html;
+        }
+
         function setupDistrictEventListeners() {
             const appSearch = document.getElementById('distAppSearch');
             const appProject = document.getElementById('distAppProject');
@@ -1939,11 +2324,21 @@
             });
             const trackingSearch = document.getElementById('distTrackingSearch');
             const trackingProject = document.getElementById('distTrackingProject');
+            const creditSearch = document.getElementById('distCreditSearch');
+            const creditProject = document.getElementById('distCreditProject');
             if (trackingSearch) trackingSearch.addEventListener('input', () => {
                 saveViewState();
                 renderDistrictTrackingTable();
             });
             if (trackingProject) trackingProject.addEventListener('change', () => {
+                saveViewState();
+                renderDistrictData();
+            });
+            if (creditSearch) creditSearch.addEventListener('input', () => {
+                saveViewState();
+                renderDistrictCreditTable();
+            });
+            if (creditProject) creditProject.addEventListener('change', () => {
                 saveViewState();
                 renderDistrictData();
             });
@@ -1953,8 +2348,10 @@
                 renderDistrictAppTable();
             } else if (currentDistrictSection === 'establishment') {
                 renderDistrictEstabTable();
-            } else {
+            } else if (currentDistrictSection === 'tracking') {
                 renderDistrictTrackingTable();
+            } else {
+                renderDistrictCreditTable();
             }
         }
 
@@ -2080,6 +2477,78 @@
                 <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
                 <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${totalTracked.toLocaleString()}</td>
                 <td class="number" style="color:#37474f;background:#cfd8dc;font-weight:700">${totalNonExistent.toLocaleString()}</td>
+            </tr>`;
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderDistrictCreditTable() {
+            const container = document.getElementById('distCreditTableContainer');
+            if (!container) return;
+
+            const search = document.getElementById('distCreditSearch')?.value?.toLowerCase() || '';
+            const project = document.getElementById('distCreditProject')?.value || '';
+
+            let filtered = sortByProjectOrder(districtCreditData);
+            if (search) filtered = filtered.filter(r => r.Project.toLowerCase().includes(search) || r.Activity.toLowerCase().includes(search));
+            if (project) filtered = filtered.filter(r => r.Project === project);
+
+            const approvalsLookup = new Map(districtAppData.map(row => [buildProjectActivityKey(row.Project, row.Activity), row]));
+            const establishmentsLookup = new Map(districtEstabData.map(row => [buildProjectActivityKey(row.Project, row.Activity), row]));
+
+            let totalApprovals = 0;
+            let totalEstablishments = 0;
+            let totalCreditApplications = 0;
+            let totalSanctioned = 0;
+            let totalDisbursed = 0;
+
+            let html = '<table><thead><tr>';
+            html += '<th style="width:22%;">Project</th>';
+            html += '<th style="width:24%;">Activity</th>';
+            html += '<th class="number" style="background:#1a237e;color:white;">Approvals</th>';
+            html += '<th class="number" style="background:#00695c;color:white;">Estab</th>';
+            html += '<th class="number" style="background:#004d40;color:white;">Estab / Appr</th>';
+            html += '<th class="number" style="background:#6a1b9a;color:white;">Credit Appl</th>';
+            html += '<th class="number" style="background:#00897b;color:white;">Sanctioned</th>';
+            html += '<th class="number" style="background:#ef6c00;color:white;">Disbursed</th>';
+            html += '<th class="number" style="background:#283593;color:white;">Credit / Appr</th>';
+            html += '<th class="number" style="background:#00695c;color:white;">Disbursed / Appr</th>';
+            html += '</tr></thead><tbody>';
+
+            filtered.forEach(row => {
+                const approvals = approvalsLookup.get(buildProjectActivityKey(row.Project, row.Activity))?.Approvals || 0;
+                const establishments = establishmentsLookup.get(buildProjectActivityKey(row.Project, row.Activity))?.Estab || 0;
+                totalApprovals += approvals;
+                totalEstablishments += establishments;
+                totalCreditApplications += row['Credit Applications'] || 0;
+                totalSanctioned += row.Sanctioned || 0;
+                totalDisbursed += row.Disbursed || 0;
+
+                html += `<tr>
+                    <td class="project-cell">${row.Project}</td>
+                    <td class="activity-cell">${row.Activity}</td>
+                    <td class="number" style="color:#1a237e;background:#e8eaf6;font-weight:700">${approvals.toLocaleString()}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${establishments.toLocaleString()}</td>
+                    <td class="number" style="color:#004d40;background:#e0f2f1;font-weight:700">${approvals > 0 ? ((establishments / approvals) * 100).toFixed(1) + '%' : '-'}</td>
+                    <td class="number" style="color:#6a1b9a;background:#f3e5f5;font-weight:700">${(row['Credit Applications'] || 0).toLocaleString()}</td>
+                    <td class="number" style="color:#00897b;background:#e0f2f1;font-weight:700">${(row.Sanctioned || 0).toLocaleString()}</td>
+                    <td class="number" style="color:#ef6c00;background:#fff3e0;font-weight:700">${(row.Disbursed || 0).toLocaleString()}</td>
+                    <td class="number" style="color:#283593;background:#e8eaf6;font-weight:700">${approvals > 0 ? (((row['Credit Applications'] || 0) / approvals) * 100).toFixed(1) + '%' : '-'}</td>
+                    <td class="number" style="color:#00695c;background:#e0f2f1;font-weight:700">${approvals > 0 ? (((row.Disbursed || 0) / approvals) * 100).toFixed(1) + '%' : '-'}</td>
+                </tr>`;
+            });
+
+            html += `<tr style="background:#f5f5f5;font-weight:bold;border-top:2px solid #333;">
+                <td colspan="2" style="text-align:right;padding:12px;"><strong>Grand Total:</strong></td>
+                <td class="number" style="color:#1a237e;background:#c5cae9;font-weight:700">${totalApprovals.toLocaleString()}</td>
+                <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalEstablishments.toLocaleString()}</td>
+                <td class="number" style="color:#004d40;background:#b2dfdb;font-weight:700">${totalApprovals > 0 ? ((totalEstablishments / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+                <td class="number" style="color:#6a1b9a;background:#e1bee7;font-weight:700">${totalCreditApplications.toLocaleString()}</td>
+                <td class="number" style="color:#00897b;background:#b2dfdb;font-weight:700">${totalSanctioned.toLocaleString()}</td>
+                <td class="number" style="color:#ef6c00;background:#ffe0b2;font-weight:700">${totalDisbursed.toLocaleString()}</td>
+                <td class="number" style="color:#283593;background:#c5cae9;font-weight:700">${totalApprovals > 0 ? ((totalCreditApplications / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
+                <td class="number" style="color:#00695c;background:#b2dfdb;font-weight:700">${totalApprovals > 0 ? ((totalDisbursed / totalApprovals) * 100).toFixed(1) + '%' : '-'}</td>
             </tr>`;
 
             html += '</tbody></table>';

@@ -47,6 +47,13 @@
                     <div style="margin-top:8px;font-size:0.9em"><span id="total-appr">0</span> Appr (<span
                             id="total-rate">0%</span>)</div>
                 </div>
+                <div class="stat-card total" style="border-left:5px solid #ef6c00">
+                    <h3>&#9989; Total Approvals</h3>
+                    <div class="value" id="total-approvals-card">0</div>
+                    <p>Approved Applications</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-appr-share">0</span> Kmr, <span id="jammu-appr-share">0</span> Jmu</div>
+                    <div style="font-size:0.85em;color:#666;">(<span id="kashmir-appr-rate-card">0%</span> Kmr, <span id="jammu-appr-rate-card">0%</span> Jmu of Appl)</div>
+                </div>
                 <div class="stat-card total" style="border-left:5px solid #00695c">
                     <h3>&#9989; Total Estab</h3>
                     <div class="value" id="total-estab">0</div>
@@ -63,12 +70,40 @@
                 </div>
             </div>
 
+            <div class="stats-grid division-stats-grid">
+                <div class="stat-card kashmir" style="border-left:5px solid #0d47a1">
+                    <h3>&#9989; Kashmir Approvals</h3>
+                    <div class="value" id="kashmir-approvals-widget">0</div>
+                    <p>Approved Applications</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-approval-widget-rate">0%</span> of Kashmir Applications</div>
+                </div>
+                <div class="stat-card jammu" style="border-left:5px solid #b71c1c">
+                    <h3>&#9989; Jammu Approvals</h3>
+                    <div class="value" id="jammu-approvals-widget">0</div>
+                    <p>Approved Applications</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="jammu-approval-widget-rate">0%</span> of Jammu Applications</div>
+                </div>
+                <div class="stat-card kashmir" style="border-left:5px solid #00695c">
+                    <h3>&#127793; Kashmir Establishments</h3>
+                    <div class="value" id="kashmir-estab-widget">0</div>
+                    <p>Units Established</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="kashmir-estab-widget-rate">0%</span> of Kashmir Approvals</div>
+                </div>
+                <div class="stat-card jammu" style="border-left:5px solid #2e7d32">
+                    <h3>&#127793; Jammu Establishments</h3>
+                    <div class="value" id="jammu-estab-widget">0</div>
+                    <p>Units Established</p>
+                    <div style="margin-top:8px;font-size:0.9em"><span id="jammu-estab-widget-rate">0%</span> of Jammu Approvals</div>
+                </div>
+            </div>
+
             <div class="tabs">
                 <div class="tab active" onclick="showTab('overview')">&#128202; Overview</div>
                 <div class="tab" onclick="showTab('insights')">&#128161; Insights</div>
                 <div class="tab" onclick="showTab('activities')">&#128203; Application Processing</div>
                 <div class="tab" onclick="showTab('establishment')">&#9989; Establishment Data</div>
                 <div class="tab" onclick="showTab('tracking')">&#128269; Tracking Data</div>
+                <div class="tab" onclick="showTab('credit')">&#127974; Credit</div>
                 <div class="tab" onclick="showTab('district')">&#127968; District View</div>
             </div>
 
@@ -228,6 +263,20 @@
                         </select>
                     </div>
                     <div id="trackingTableContainer"></div>
+                </div>
+            </div>
+
+            <div id="credit" class="tab-content">
+                <div class="table-section">
+                    <h2>&#127974; Credit Processing</h2>
+                    <div class="controls">
+                        <input type="text" id="creditSearchInput" placeholder="&#128269; Search project or activity...">
+                        <select id="creditProjectFilter">
+                            <option value="">&#128193; All Projects</option>
+                        </select>
+                    </div>
+                    <div id="creditSummaryCards" style="margin-bottom:20px;"></div>
+                    <div id="creditTableContainer"></div>
                 </div>
             </div>
 
